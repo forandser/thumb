@@ -1,0 +1,50 @@
+/*
+ * 디자인 토큰 — 썸네일 제작 앱.
+ * fdp(상세페이지 사이트)와 같은 계열(밝은 배경 + 포인트 컬러 1개).
+ * 포인트 컬러는 과일 코랄(#F0654A) 하나로 통일한다.
+ */
+:root {
+  /* Point color (single accent) */
+  --color-primary: #f0654a;
+  --color-primary-dark: #d8492f;
+  --color-primary-soft: #fdeee9;
+  --color-primary-ring: rgba(240, 101, 74, 0.18);
+
+  /* Neutral (ink) */
+  --color-ink: #23262b;
+  --color-ink-secondary: #626871;
+  --color-ink-tertiary: #969aa3;
+  --color-line: #ececef;
+  --color-line-strong: #d9dbe0;
+
+  /* Background */
+  --color-bg-page: #fafbfc;
+  --color-bg-surface: #ffffff;
+  --color-bg-subtle: #f4f5f7;
+
+  /* Semantic */
+  --color-success: #16a34a;
+  --color-success-soft: #e9f7ef;
+  --color-warning: #d97706;
+  --color-warning-soft: #fdf3e3;
+  --color-danger: #dc2626;
+
+  /* Shadow */
+  --shadow-card: 0 8px 40px rgba(210, 216, 228, 0.45);
+  --shadow-modal: 0 24px 70px rgba(20, 24, 33, 0.28);
+
+  /* Radius */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-size-caption: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+}

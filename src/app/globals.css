@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* @font-face는 layout.tsx가 basePath 보정 URL로 <style> 주입 — src/lib/fonts/font-face-css.ts */
+
+@theme {
+  --font-sans: var(--font-family);
+
+  /* Tailwind 4 토큰 매핑 */
+  --color-primary: var(--color-primary);
+  --color-ink: var(--color-ink);
+  --color-line: var(--color-line);
+  --color-canvas: var(--color-bg-page);
+  --color-surface: var(--color-bg-surface);
+}
+
+html,
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-md);
+  color: var(--color-ink);
+  background: var(--color-bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 폼 요소 포커스 링 — 브라우저 기본 검정 아웃라인 대신 포인트 코랄. */
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+button:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-ring);
+}
+
+/* 슬라이더 공통 스타일 (range) */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-line-strong);
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(20, 24, 33, 0.25);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(20, 24, 33, 0.25);
+  cursor: pointer;
+}
+/* 과보정 경고 상태 슬라이더 — 노란색 트랙·손잡이 */
+input[type="range"].warn {
+  background: #f5d58a;
+}
+input[type="range"].warn::-webkit-slider-thumb {
+  background: var(--color-warning);
+}
+input[type="range"].warn::-moz-range-thumb {
+  background: var(--color-warning);
+}
