@@ -6,23 +6,22 @@ import { t } from "@/lib/i18n"
 const ACCEPT = ["image/jpeg", "image/png", "image/webp"]
 
 /**
- * 사진 업로드 — 드래그&드롭 + 클릭. JPG/PNG/WebP만 허용.
- * 검증은 부모(handleFile → validateImageFile)로 위임하고, 결과 오류 문구는 error prop으로 받는다.
+ * 사진 업로드 — 드래그&드롭 + 클릭. JPG/PNG/WebP만 허용, 여러 장(최대 30장) 동시 수용.
+ * 검증·개수 제한은 부모(addPhotos → validateImageFile)로 위임하고, 안내 문구는 error prop으로 받는다.
  */
 export function UploadDropzone({
-  onFile,
+  onFiles,
   error,
 }: {
-  onFile: (file: File) => void
+  onFiles: (files: FileList) => void
   error?: string | null
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
 
   const handleFiles = (files: FileList | null) => {
-    const file = files?.[0]
-    if (!file) return
-    onFile(file)
+    if (!files || files.length === 0) return
+    onFiles(files)
   }
 
   return (
@@ -64,7 +63,7 @@ export function UploadDropzone({
       </div>
       <div style={{ fontSize: 17, fontWeight: 800 }}>{t.retouch.uploadTitle}</div>
       <div style={{ fontSize: 13, color: "var(--color-ink-secondary)" }}>
-        {t.retouch.uploadHint}
+        {t.retouch.uploadHintMulti}
       </div>
       <div
         style={{
@@ -98,7 +97,11 @@ export function UploadDropzone({
         ref={inputRef}
         type="file"
         accept={ACCEPT.join(",")}
-        onChange={(e) => handleFiles(e.target.files)}
+        multiple
+        onChange={(e) => {
+          handleFiles(e.target.files)
+          e.target.value = ""
+        }}
         style={{ display: "none" }}
       />
     </div>

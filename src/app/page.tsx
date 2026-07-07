@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { TabKey, TopBar } from "@/components/ui/TopBar"
 import { KeySettingsModal } from "@/features/settings/KeySettingsModal"
 import { PhotoRetouch } from "@/features/retouch/PhotoRetouch"
@@ -13,7 +13,13 @@ export default function Page() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { keys, save } = useApiKeys()
 
-  const anyKeyConnected = keys.claude.trim().length > 0 || keys.gemini.trim().length > 0
+  // v0.2 비용 트래커 — 세션 동안 AI 호출 추정 비용 누적(장당 고정 추정치).
+  const [aiSpend, setAiSpend] = useState(0)
+  const addSpend = useCallback((krw: number) => setAiSpend((s) => s + krw), [])
+  const resetSpend = useCallback(() => setAiSpend(0), [])
+
+  const hasClaudeKey = keys.claude.trim().length > 0
+  const anyKeyConnected = hasClaudeKey || keys.gemini.trim().length > 0
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -22,11 +28,18 @@ export default function Page() {
         onTabChange={setTab}
         onOpenSettings={() => setSettingsOpen(true)}
         anyKeyConnected={anyKeyConnected}
+        spend={aiSpend}
+        onResetSpend={resetSpend}
       />
 
       <main style={{ flex: 1 }}>
         {tab === "retouch" ? (
-          <PhotoRetouch />
+          <PhotoRetouch
+            apiKey={keys.claude.trim()}
+            hasKey={hasClaudeKey}
+            onNeedKey={() => setSettingsOpen(true)}
+            onSpend={addSpend}
+          />
         ) : (
           <ThumbnailComingSoon onGoRetouch={() => setTab("retouch")} />
         )}

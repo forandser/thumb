@@ -6,18 +6,23 @@ export type TabKey = "thumbnail" | "retouch"
 
 /**
  * 공통 셸 상단바 — 로고 · 탭 2개 · 예상 비용 · 키 설정 버튼.
- * 비용은 v0.1에서 항상 ₩0(무료 보정만). 키 연결 여부는 ⚙ 버튼에 점으로 표시.
+ * v0.2: 비용은 세션 동안 AI 호출 추정 비용을 누적 표시하고, 값이 있으면 초기화 버튼을 함께 보인다.
+ * 키 연결 여부는 ⚙ 버튼에 점으로 표시.
  */
 export function TopBar({
   activeTab,
   onTabChange,
   onOpenSettings,
   anyKeyConnected,
+  spend,
+  onResetSpend,
 }: {
   activeTab: TabKey
   onTabChange: (tab: TabKey) => void
   onOpenSettings: () => void
   anyKeyConnected: boolean
+  spend: number
+  onResetSpend: () => void
 }) {
   return (
     <header
@@ -89,10 +94,35 @@ export function TopBar({
           }}
         >
           <span style={{ fontSize: 10, color: "var(--color-ink-tertiary)" }}>{t.cost.label}</span>
-          <span style={{ fontSize: 15, fontWeight: 800, color: "var(--color-ink)" }}>
-            {t.cost.zero}
+          <span
+            style={{
+              fontSize: 15,
+              fontWeight: 800,
+              color: spend > 0 ? "var(--color-primary)" : "var(--color-ink)",
+            }}
+          >
+            {spend > 0 ? `₩${spend.toLocaleString("ko-KR")}` : t.cost.zero}
           </span>
         </div>
+        {spend > 0 && (
+          <button
+            type="button"
+            onClick={onResetSpend}
+            title={t.cost.resetTitle}
+            style={{
+              padding: "5px 10px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--color-line-strong)",
+              background: "var(--color-bg-surface)",
+              color: "var(--color-ink-secondary)",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {t.cost.reset}
+          </button>
+        )}
         <button
           type="button"
           onClick={onOpenSettings}

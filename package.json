@@ -1,6 +1,6 @@
 {
   "name": "thumbnail-maker",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "private": true,
   "description": "썸네일 제작 — 과일 썸네일 AI 제작·사진 보정 사이트 (BYOK, 정적 export)",
   "scripts": {
@@ -11,6 +11,7 @@
     "type-check": "node ./node_modules/typescript/bin/tsc --noEmit"
   },
   "dependencies": {
+    "jszip": "^3.10.1",
     "next": "16.2.3",
     "react": "19.2.4",
     "react-dom": "19.2.4"
