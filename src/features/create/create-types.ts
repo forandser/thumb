@@ -65,8 +65,16 @@ export type PipelinePhase = "idle" | "running" | "done" | "canceled"
 
 /** 파이프라인 시작 설정(prompt-engine 입력 + 재료 base64 + 후보 수). */
 export interface PipelineConfig {
-  /** 재료 사진 AI base64(실물 보존 편집 + 검수 대조 재료). */
+  /**
+   * 대표 재료 사진 AI base64. 실물 보존 편집의 **기준 이미지**이자 검수 대조 원본(고정).
+   * 검수(inspect)는 항상 이 대표 1장하고만 대조한다 — 보조 컷은 대조에 넣지 않는다.
+   */
   materialBase64: string
+  /**
+   * 보조 재료 컷 AI base64(같은 상품 다른 각도, 최대 2장). 실물 보존 생성 입력에만 함께 실어
+   * 품질을 높이는 참고용. 검수 대조·레퍼런스와 무관하다. 없으면 빈 배열.
+   */
+  auxBase64s: string[]
   mode: CreateMode
   /** 프리셋 key. 레퍼런스 따라가기면 null. */
   presetKey: PresetKey | null
@@ -75,4 +83,13 @@ export interface PipelineConfig {
   count?: number
   condition?: string
   candidateCount: number
+}
+
+/**
+ * 실물 보존 생성 입력용 이미지 배열 = [대표, 보조…]. **재료 픽셀만** 포함한다.
+ * PipelineConfig에는 레퍼런스 base64가 아예 없으므로(구조적 차단), 이 함수를 거치는 한
+ * 레퍼런스 픽셀이 Gemini 생성 입력에 섞일 수 없다(스펙 §불변 원칙 — 저작권 차단).
+ */
+export function generationInputBase64s(config: PipelineConfig): string[] {
+  return [config.materialBase64, ...config.auxBase64s]
 }

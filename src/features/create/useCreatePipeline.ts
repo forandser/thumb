@@ -20,7 +20,7 @@ import { GENERATE_COST_KRW, INSPECT_COST_KRW } from "@/lib/ai/costs"
 import { inspectCandidate } from "@/lib/ai/inspect"
 import { appendRetryHint, buildPrompt, VARIATION_INSTRUCTION } from "@/lib/create/prompt-engine"
 import { imageToAiBase64 } from "@/lib/image/source"
-import type { Candidate, PipelineConfig, PipelinePhase } from "./create-types"
+import { generationInputBase64s, type Candidate, type PipelineConfig, type PipelinePhase } from "./create-types"
 
 /** 후보 생성 동시 처리 상한(스펙 §구현 지침). */
 const CONCURRENCY = 2
@@ -92,6 +92,23 @@ function dataUrlToAiBase64(dataUrl: string): Promise<string> {
   })
 }
 
+/**
+ * config → 생성 프롬프트. 초기 생성은 [대표, 보조…]를 함께 싣지만, 재생성은 스펙 §생성대로
+ * 대표 1장만 싣는다(단일 이미지 입력 — 변경 없음). 재생성 프롬프트에서는 실제로 보조 컷이
+ * 함께 가지 않으므로 다각도 지시(auxCount)도 빼서 지시와 입력을 일치시킨다.
+ */
+function buildConfigPrompt(config: PipelineConfig, regen = false): string {
+  return buildPrompt({
+    mode: config.mode,
+    presetKey: config.presetKey,
+    referenceStyle: config.referenceStyle,
+    variety: config.variety,
+    count: config.count,
+    condition: config.condition,
+    auxCount: regen ? 0 : config.auxBase64s.length,
+  })
+}
+
 export function useCreatePipeline({
   claudeKey,
   geminiKey,
@@ -125,12 +142,22 @@ export function useCreatePipeline({
     setCandidates((prev) => prev.map((c) => (c.id === id ? { ...c, ...partial } : c)))
   }, [])
 
-  /** 설정·모드에 맞는 1장 생성(재생성/베리에이션은 별도 prompt 전달). */
+  /**
+   * 설정·모드에 맞는 1장 생성(재생성/베리에이션은 별도 prompt 전달).
+   * singleInput=true면 실물 보존이라도 대표 1장만 싣는다(재생성 경로 — 스펙 §생성 단일 이미지).
+   */
   const genOne = useCallback(
-    (config: PipelineConfig, prompt: string, signal: AbortSignal): Promise<string> => {
+    (config: PipelineConfig, prompt: string, signal: AbortSignal, singleInput = false): Promise<string> => {
+      // 실물 보존 초기 생성은 [대표, 보조…]를 함께 실어 편집(레퍼런스 픽셀은 구조적으로 미포함).
+      // 재생성은 대표 1장만 실어 v0.4와 동일한 단일 이미지 입력을 유지한다.
       const call =
         config.mode === "preserve"
-          ? editImage(geminiKey, config.materialBase64, prompt, signal)
+          ? editImage(
+              geminiKey,
+              singleInput ? config.materialBase64 : generationInputBase64s(config),
+              prompt,
+              signal,
+            )
           : generateImage(geminiKey, prompt, signal)
       return call.then((r) => r.dataUrl)
     },
@@ -141,7 +168,6 @@ export function useCreatePipeline({
   const inspectAndMaybeRegen = useCallback(
     async (
       config: PipelineConfig,
-      prompt: string,
       id: string,
       dataUrl: string,
       signal: AbortSignal,
@@ -170,8 +196,9 @@ export function useCreatePipeline({
         // 불합격 + 예산 확보 성공 시에만 재생성(후보당 1회는 reserveRegen 호출 전 status로 보장).
         if (r.verdict === "fail" && reserveRegen()) {
           patch(id, { status: "regenerating", regenerated: true })
-          const retryPrompt = appendRetryHint(prompt, r.retryHint)
-          const dataUrl2 = await withRetry((s) => genOne(config, retryPrompt, s), signal)
+          // 재생성은 대표 1장 단일 입력(스펙 §생성) — 프롬프트도 다각도 지시 없이 조립한다.
+          const retryPrompt = appendRetryHint(buildConfigPrompt(config, true), r.retryHint)
+          const dataUrl2 = await withRetry((s) => genOne(config, retryPrompt, s, true), signal)
           onSpend(GENERATE_COST_KRW)
           patch(id, { dataUrl: dataUrl2, status: "inspecting" })
           const candB642 = await dataUrlToAiBase64(dataUrl2)
@@ -214,14 +241,7 @@ export function useCreatePipeline({
       setCandidates(slots)
       setPhase("running")
 
-      const prompt = buildPrompt({
-        mode: config.mode,
-        presetKey: config.presetKey,
-        referenceStyle: config.referenceStyle,
-        variety: config.variety,
-        count: config.count,
-        condition: config.condition,
-      })
+      const prompt = buildConfigPrompt(config)
 
       let regenRemaining = REGEN_BUDGET
       // 동기 실행(체크→감소 사이에 await 없음)이라 워커 경합에도 안전.
@@ -238,7 +258,7 @@ export function useCreatePipeline({
           const dataUrl = await withRetry((s) => genOne(config, prompt, s), signal)
           onSpend(GENERATE_COST_KRW)
           patch(slot.id, { dataUrl, status: "done" })
-          await inspectAndMaybeRegen(config, prompt, slot.id, dataUrl, signal, reserveRegen)
+          await inspectAndMaybeRegen(config, slot.id, dataUrl, signal, reserveRegen)
         } catch (e) {
           if (e instanceof DOMException && e.name === "AbortError") return
           patch(slot.id, {
@@ -272,21 +292,15 @@ export function useCreatePipeline({
       const controller = abortRef.current ?? new AbortController()
       abortRef.current = controller
       const signal = controller.signal
-      const prompt = buildPrompt({
-        mode: config.mode,
-        presetKey: config.presetKey,
-        referenceStyle: config.referenceStyle,
-        variety: config.variety,
-        count: config.count,
-        condition: config.condition,
-      })
+      // 재생성은 대표 1장만 입력하는 단일 이미지 경로(스펙 §생성) — 프롬프트도 다각도 지시 없이 조립.
+      const prompt = buildConfigPrompt(config, true)
       patch(id, { status: "generating", errorCode: undefined })
       try {
-        const dataUrl = await withRetry((s) => genOne(config, prompt, s), signal)
+        const dataUrl = await withRetry((s) => genOne(config, prompt, s, true), signal)
         onSpend(GENERATE_COST_KRW)
         patch(id, { dataUrl, status: "done", regenerated: false, inspection: undefined })
         // 수동 재생성은 예산과 무관하게 자동 재생성을 허용하지 않는다(reserveRegen: 항상 false).
-        await inspectAndMaybeRegen(config, prompt, id, dataUrl, signal, () => false)
+        await inspectAndMaybeRegen(config, id, dataUrl, signal, () => false)
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return
         patch(id, { status: "failed", errorCode: e instanceof AiError ? e.code : "unknown" })

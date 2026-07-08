@@ -9,68 +9,118 @@ import type { ImageSlot } from "./create-types"
 const QUALITY_MIN_SIDE = 1000
 
 /**
- * STEP 1 — 사진 올리기. 재료(필수·픽셀 사용)와 레퍼런스(선택·참조 전용) 업로드.
- * 재료 저화질이면 경고 + 보정 탭 연결 버튼. 레퍼런스에는 '참조 전용' 뱃지·저작권 주의.
+ * STEP 1 — 사진 올리기. 재료(필수·픽셀 사용, 대표 1 + 보조 다수)와 레퍼런스(선택·참조 전용)를
+ * 각각 그리드로 여러 장 업로드한다.
+ * - 재료: 첫 장 자동 대표, 카드 클릭으로 대표 변경(대표 뱃지). 대표가 저화질이면 경고+보정 탭 버튼,
+ *   보조 컷 저화질은 카드에 작은 '저화질' 뱃지만(대표만 픽셀 기준이라 차단 없음).
+ * - 레퍼런스: 전 장 '참조 전용' 뱃지 + 저작권 주의.
  * 실제 디코드·base64 생성은 부모(CreateWizard)가 담당하고 여기선 File 검증·표시만 한다.
  */
 export function Step1Upload({
-  material,
-  reference,
+  materials,
+  heroIndex,
+  references,
+  materialMax,
+  referenceMax,
   error,
-  onPickMaterial,
-  onPickReference,
+  onAddMaterial,
   onRemoveMaterial,
+  onSetHero,
+  onAddReference,
   onRemoveReference,
   onGoRetouch,
 }: {
-  material: ImageSlot | null
-  reference: ImageSlot | null
+  materials: ImageSlot[]
+  heroIndex: number
+  references: ImageSlot[]
+  materialMax: number
+  referenceMax: number
   error: string | null
-  onPickMaterial: (file: File) => void
-  onPickReference: (file: File) => void
-  onRemoveMaterial: () => void
-  onRemoveReference: () => void
+  onAddMaterial: (files: File[]) => void
+  onRemoveMaterial: (index: number) => void
+  onSetHero: (index: number) => void
+  onAddReference: (files: File[]) => void
+  onRemoveReference: (index: number) => void
   onGoRetouch: () => void
 }) {
-  const materialLow = !!material && material.maxSide < QUALITY_MIN_SIDE
+  const heroLow =
+    !!materials[heroIndex] && materials[heroIndex].maxSide < QUALITY_MIN_SIDE
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 16,
-        }}
-      >
-        <SlotCard
-          title={t.create.materialTitle}
-          hint={t.create.materialHint}
-          uploadLabel={t.create.materialUpload}
-          slot={material}
-          onPick={onPickMaterial}
-          onRemove={onRemoveMaterial}
-        >
-          {materialLow && (
-            <div style={warnBox}>
-              <span>⚠️ {fmt(t.create.qualityLow, { px: material!.maxSide })}</span>
-              <button type="button" onClick={onGoRetouch} style={warnBtn}>
-                {t.create.qualityGoRetouch}
-              </button>
-            </div>
-          )}
-        </SlotCard>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* 재료 섹션 */}
+      <section style={sectionCard}>
+        <div style={sectionHead}>
+          <h3 style={{ fontSize: 14, fontWeight: 800 }}>{t.create.materialTitle}</h3>
+          <span style={countTag}>
+            {fmt(t.create.uploadCount, { n: materials.length, max: materialMax })}
+          </span>
+        </div>
+        <p style={hintText}>{t.create.materialHint}</p>
 
-        <SlotCard
-          title={t.create.referenceTitle}
-          hint={t.create.referenceHint}
-          uploadLabel={t.create.referenceUpload}
-          slot={reference}
-          badge={t.create.referenceBadge}
-          onPick={onPickReference}
-          onRemove={onRemoveReference}
-        />
-      </div>
+        <div style={grid}>
+          {materials.map((slot, i) => (
+            <ImageTile
+              key={slot.url}
+              slot={slot}
+              alt={fmt(t.create.materialTileAlt, { n: i + 1 })}
+              isHero={i === heroIndex}
+              heroLabel={t.create.heroBadge}
+              lowLabel={
+                i !== heroIndex && slot.maxSide < QUALITY_MIN_SIDE
+                  ? t.create.lowQualityBadge
+                  : null
+              }
+              onClick={i === heroIndex ? undefined : () => onSetHero(i)}
+              setHeroTitle={t.create.setHero}
+              onRemove={() => onRemoveMaterial(i)}
+              removeLabel={t.create.removeImage}
+            />
+          ))}
+          {materials.length < materialMax && (
+            <AddTile label={t.create.materialUpload} onPick={onAddMaterial} />
+          )}
+        </div>
+
+        {heroLow && (
+          <div style={warnBox}>
+            <span>⚠️ {fmt(t.create.qualityLow, { px: materials[heroIndex].maxSide })}</span>
+            <button type="button" onClick={onGoRetouch} style={warnBtn}>
+              {t.create.qualityGoRetouch}
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* 레퍼런스 섹션 */}
+      <section style={sectionCard}>
+        <div style={sectionHead}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 800 }}>{t.create.referenceTitle}</h3>
+            <span style={refBadge}>{t.create.referenceBadge}</span>
+          </div>
+          <span style={countTag}>
+            {fmt(t.create.uploadCount, { n: references.length, max: referenceMax })}
+          </span>
+        </div>
+        <p style={hintText}>{t.create.referenceHint}</p>
+
+        <div style={grid}>
+          {references.map((slot, i) => (
+            <ImageTile
+              key={slot.url}
+              slot={slot}
+              alt={fmt(t.create.referenceTileAlt, { n: i + 1 })}
+              badge={t.create.referenceBadge}
+              onRemove={() => onRemoveReference(i)}
+              removeLabel={t.create.removeImage}
+            />
+          ))}
+          {references.length < referenceMax && (
+            <AddTile label={t.create.referenceUpload} onPick={onAddReference} />
+          )}
+        </div>
+      </section>
 
       <p style={copyrightNote}>⚠ {t.create.copyrightWarn}</p>
 
@@ -79,92 +129,86 @@ export function Step1Upload({
   )
 }
 
-function SlotCard({
-  title,
-  hint,
-  uploadLabel,
+/** 업로드된 사진 1장 타일 — 대표 뱃지·저화질 뱃지·대표 지정 클릭·삭제. */
+function ImageTile({
   slot,
+  alt,
+  isHero,
+  heroLabel,
+  lowLabel,
   badge,
-  onPick,
+  onClick,
+  setHeroTitle,
   onRemove,
-  children,
+  removeLabel,
 }: {
-  title: string
-  hint: string
-  uploadLabel: string
-  slot: ImageSlot | null
+  slot: ImageSlot
+  alt: string
+  isHero?: boolean
+  heroLabel?: string
+  lowLabel?: string | null
   badge?: string
-  onPick: (file: File) => void
+  onClick?: () => void
+  setHeroTitle?: string
   onRemove: () => void
-  children?: React.ReactNode
+  removeLabel: string
 }) {
-  const inputRef = useRef<HTMLInputElement>(null)
-
+  const clickable = !!onClick
   return (
-    <div style={slotCol}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 800 }}>{title}</h3>
-        {badge && <span style={refBadge}>{badge}</span>}
-      </div>
-      <p style={{ margin: 0, fontSize: 12, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
-        {hint}
-      </p>
-
-      {slot ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={slot.url}
-            alt={title}
-            style={{
-              width: "100%",
-              aspectRatio: "1 / 1",
-              objectFit: "contain",
-              background: "var(--color-bg-subtle)",
-              borderRadius: "var(--radius-md)",
-              border: "1px solid var(--color-line)",
-            }}
-          />
-          <button type="button" onClick={onRemove} style={outlineBtn}>
-            ↺ {t.create.removeImage}
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          style={dropzone}
-        >
-          <span style={{ fontSize: 34 }} aria-hidden>
-            📷
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-primary)" }}>
-            + {uploadLabel}
-          </span>
-          <span style={{ fontSize: 11, color: "var(--color-ink-tertiary)" }}>
-            {t.retouch.uploadFormats}
-          </span>
-        </button>
-      )}
-
-      {children}
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f && validateImageFile(f).ok) onPick(f)
-          e.target.value = ""
+    <div style={{ position: "relative" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={slot.url}
+        alt={alt}
+        onClick={onClick}
+        title={clickable ? setHeroTitle : undefined}
+        style={{
+          width: "100%",
+          aspectRatio: "1 / 1",
+          objectFit: "cover",
+          background: "var(--color-bg-subtle)",
+          borderRadius: "var(--radius-md)",
+          border: isHero ? "2px solid var(--color-primary)" : "1px solid var(--color-line)",
+          cursor: clickable ? "pointer" : "default",
+          display: "block",
         }}
-        style={{ display: "none" }}
       />
+      {isHero && heroLabel && <span style={heroTag}>★ {heroLabel}</span>}
+      {badge && <span style={tileRefTag}>{badge}</span>}
+      {lowLabel && <span style={lowTag}>{lowLabel}</span>}
+      <button type="button" onClick={onRemove} aria-label={removeLabel} title={removeLabel} style={removeBtn}>
+        ✕
+      </button>
     </div>
   )
 }
 
-const slotCol: React.CSSProperties = {
+/** 사진 추가 타일(파일 선택). 일괄 선택분은 한 번에 배열로 넘겨 상한 판정·안내를 일관 처리한다. */
+function AddTile({ label, onPick }: { label: string; onPick: (files: File[]) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
+    <button type="button" onClick={() => inputRef.current?.click()} style={addTile}>
+      <span style={{ fontSize: 28 }} aria-hidden>
+        ＋
+      </span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary)" }}>{label}</span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []).filter((f) => validateImageFile(f).ok)
+          if (files.length) onPick(files)
+          e.target.value = ""
+        }}
+        style={{ display: "none" }}
+      />
+    </button>
+  )
+}
+
+const sectionCard: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
@@ -174,18 +218,100 @@ const slotCol: React.CSSProperties = {
   border: "1px solid var(--color-line)",
 }
 
-const dropzone: React.CSSProperties = {
+const sectionHead: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  flexWrap: "wrap",
+}
+
+const hintText: React.CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  color: "var(--color-ink-tertiary)",
+  lineHeight: 1.5,
+}
+
+const grid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+  gap: 10,
+}
+
+const countTag: React.CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 700,
+  color: "var(--color-ink-tertiary)",
+}
+
+const addTile: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  gap: 8,
-  minHeight: 220,
-  padding: 24,
+  gap: 6,
+  aspectRatio: "1 / 1",
+  padding: 8,
   borderRadius: "var(--radius-md)",
   border: "2px dashed var(--color-line-strong)",
   background: "var(--color-bg-subtle)",
   cursor: "pointer",
+  textAlign: "center",
+}
+
+const heroTag: React.CSSProperties = {
+  position: "absolute",
+  top: 6,
+  left: 6,
+  padding: "2px 8px",
+  borderRadius: "var(--radius-pill)",
+  background: "var(--color-primary)",
+  color: "#fff",
+  fontSize: 10.5,
+  fontWeight: 800,
+}
+
+const tileRefTag: React.CSSProperties = {
+  position: "absolute",
+  top: 6,
+  left: 6,
+  padding: "2px 8px",
+  borderRadius: "var(--radius-pill)",
+  background: "var(--color-warning-soft)",
+  color: "#8a5a08",
+  fontSize: 10,
+  fontWeight: 800,
+}
+
+const lowTag: React.CSSProperties = {
+  position: "absolute",
+  bottom: 6,
+  left: 6,
+  padding: "2px 7px",
+  borderRadius: "var(--radius-pill)",
+  background: "rgba(138,90,8,0.9)",
+  color: "#fff",
+  fontSize: 10,
+  fontWeight: 800,
+}
+
+const removeBtn: React.CSSProperties = {
+  position: "absolute",
+  top: 6,
+  right: 6,
+  width: 22,
+  height: 22,
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(0,0,0,0.55)",
+  color: "#fff",
+  fontSize: 12,
+  lineHeight: 1,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 }
 
 const refBadge: React.CSSProperties = {
@@ -219,17 +345,6 @@ const warnBtn: React.CSSProperties = {
   color: "#8a5a08",
   fontSize: 12,
   fontWeight: 700,
-  cursor: "pointer",
-}
-
-const outlineBtn: React.CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: "var(--radius-sm)",
-  border: "1px solid var(--color-line-strong)",
-  background: "var(--color-bg-surface)",
-  color: "var(--color-ink)",
-  fontSize: 13,
-  fontWeight: 600,
   cursor: "pointer",
 }
 

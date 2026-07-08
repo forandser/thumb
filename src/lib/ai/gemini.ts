@@ -166,22 +166,29 @@ async function requestGemini(
 }
 
 /**
- * 이미지 1장 편집(실물 보존 생성·누끼·화질 개선·리터치·베리에이션 공용).
- * base64Jpeg는 접두사 없는 JPEG(줄바꿈 없음), instruction은 편집 지시문.
+ * 이미지 편집(실물 보존 생성·누끼·화질 개선·리터치·베리에이션 공용).
+ * base64Jpeg는 접두사 없는 JPEG(줄바꿈 없음). instruction은 편집 지시문.
  * 성공 시 편집된 이미지의 dataURL을 반환한다.
  * 실패는 AiError(code)로 던진다. 취소(AbortError)는 그대로 전파해 호출부가 구분한다.
+ *
+ * 다중 입력(v0.5): base64Jpeg에 배열을 넘기면 여러 장을 함께 실어 보낸다.
+ *   - 실물 보존 생성에서 [대표, 보조1, 보조2](같은 상품 다각도)를 함께 주는 용도.
+ *   - **첫 번째 이미지가 기준 상품**이며, 이 규칙은 instruction에 명시해야 한다(prompt-engine).
+ * 문자열 1개도 그대로 허용한다(하위 호환 — 누끼·화질·리터치·베리에이션·재생성은 단일 입력 유지).
+ * 여기엔 재료(대표·보조) 픽셀만 넣는다. 레퍼런스 픽셀은 어떤 경로로도 넣지 않는다(저작권 차단).
  */
 export async function editImage(
   apiKey: string,
-  base64Jpeg: string,
+  base64Jpeg: string | string[],
   instruction: string,
   signal?: AbortSignal,
 ): Promise<{ dataUrl: string }> {
-  return requestGemini(
-    apiKey,
-    [{ text: instruction }, { inline_data: { mime_type: "image/jpeg", data: base64Jpeg } }],
-    signal,
-  )
+  const images = Array.isArray(base64Jpeg) ? base64Jpeg : [base64Jpeg]
+  const parts: GeminiPart[] = [
+    { text: instruction },
+    ...images.map((data) => ({ inline_data: { mime_type: "image/jpeg", data } })),
+  ]
+  return requestGemini(apiKey, parts, signal)
 }
 
 /**

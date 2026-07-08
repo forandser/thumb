@@ -32,6 +32,11 @@ export interface PromptInput {
   count?: number
   /** 상태 한 줄(신선도·흠집) — 영어/한국어 무엇이든 참고 정보로 덧붙는다. */
   condition?: string
+  /**
+   * 실물 보존 생성 입력에 함께 실린 보조 컷 수(v0.5, 최대 2). 0/미지정이면 대표 1장뿐.
+   * 양수면 "첫 이미지가 기준, 나머지는 같은 상품 다른 각도"라는 다각도 지시를 덧붙인다.
+   */
+  auxCount?: number
 }
 
 /**
@@ -59,6 +64,14 @@ const NEUTRAL_STYLE =
 /** 실물 보존 필수 문구(스펙 §품질 파이프라인 1) — 과일 픽셀 불변, 배경·연출만 교체. */
 const PRESERVE_CLAUSE =
   "CRITICAL: keep the exact fruit from the provided source photo unchanged — do not alter the count, color, shape, ripeness, or natural bloom of the fruit. Only replace the background, props, and lighting. Preserve the real fruit pixels."
+
+/**
+ * 다각도 보조 컷 지시(v0.5, 실물 보존 + auxCount>0). editImage에 [대표, 보조…]를 함께 넣을 때,
+ * 첫 이미지가 보존 기준이고 나머지는 같은 상품의 다른 각도 참고임을 모델에 못박는다(스펙 §생성).
+ * 이 문구가 없으면 모델이 여러 이미지를 별개 상품으로 합쳐 개수를 늘릴 수 있다.
+ */
+const MULTI_ANGLE_CLAUSE =
+  "The FIRST provided image is the reference product and must be preserved exactly. Any additional provided images are the SAME single product photographed from other angles — use them only as extra reference for the real shape, color, and count. Do not merge them into multiple products or add fruit."
 
 /**
  * [피사체+품종+개수+상태] 블록. count 양수면 홀수 유도(리서치 §④).
@@ -113,7 +126,10 @@ export function buildPrompt(input: PromptInput): string {
     "photorealistic, looks like a real photograph taken with a professional camera",
     NEGATIVE,
   ]
-  if (input.mode === "preserve") blocks.push(PRESERVE_CLAUSE)
+  if (input.mode === "preserve") {
+    blocks.push(PRESERVE_CLAUSE)
+    if (input.auxCount && input.auxCount > 0) blocks.push(MULTI_ANGLE_CLAUSE)
+  }
   return blocks.join(". ") + "."
 }
 

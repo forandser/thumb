@@ -367,11 +367,30 @@ export const ko = {
     removeImage: "빼기",
     needMaterial: "재료 사진을 먼저 올려주세요.",
     seedNotice: "보정 탭에서 넘어온 사진을 재료로 담았어요.",
+    // v0.5 다중 업로드 — 재료(대표+보조)·레퍼런스 여러 장.
+    /** 섹션 개수 표기(예: 3 / 10장). */
+    uploadCount: "{n} / {max}장",
+    /** 재료 타일 대체 텍스트. */
+    materialTileAlt: "재료 사진 {n}",
+    /** 레퍼런스 타일 대체 텍스트. */
+    referenceTileAlt: "참고 사진 {n}",
+    /** 대표 컷 뱃지(생성·검수 기준이 되는 대표 재료). */
+    heroBadge: "대표",
+    /** 보조 컷을 대표로 지정하는 클릭 안내(툴팁). */
+    setHero: "이 사진을 대표로 지정",
+    /** 보조 컷 저화질 뱃지(대표만 차단, 보조는 표시만). */
+    lowQualityBadge: "저화질",
+    /** 재료 상한 초과 안내. */
+    materialMaxReached: "재료 사진은 최대 {max}장까지 올릴 수 있어요.",
+    /** 레퍼런스 상한 초과 안내. */
+    referenceMaxReached: "참고 사진은 최대 {max}장까지 올릴 수 있어요.",
 
     // STEP 2
     analyzing: "AI가 사진을 살펴보는 중...",
     analysisFailed: "분석을 건너뛰고 기본 연출로 진행해요. (분석은 프롬프트 품질 보조라 없어도 됩니다)",
     analysisTitle: "AI 분석",
+    /** 분석에 쓴 재료·참고 장수 요약(스펙 §STEP2). */
+    analysisScope: "재료 {m}장·참고 {r}장 종합 분석",
     analysisVariety: "품종",
     analysisCount: "개수",
     analysisCountUnit: "개",

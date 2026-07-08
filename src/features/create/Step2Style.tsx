@@ -5,16 +5,18 @@ import type { CreateMode } from "@/lib/create/prompt-engine"
 import { PRESETS } from "@/lib/create/presets"
 import { estimateCreateCost } from "@/lib/ai/costs"
 import type { MaterialAnalysis } from "@/lib/ai/analyze"
-import type { ImageSlot, StyleChoice } from "./create-types"
+import type { StyleChoice } from "./create-types"
 
-const CANDIDATE_OPTIONS = [3, 4] as const
+const CANDIDATE_OPTIONS = [3, 4, 6] as const
 
 /**
  * STEP 2 — 연출 고르기. 클로드 분석 카드 · 제작 방식(실물 보존/새로 그리기) ·
  * 연출 프리셋 7종(+레퍼런스 따라가기) · 후보 수 · 예상 비용 · 생성 버튼.
  */
 export function Step2Style({
-  reference,
+  hasReference,
+  materialCount,
+  referenceCount,
   analysis,
   analyzing,
   analysisFailed,
@@ -30,7 +32,9 @@ export function Step2Style({
   onGenerate,
   onNeedKey,
 }: {
-  reference: ImageSlot | null
+  hasReference: boolean
+  materialCount: number
+  referenceCount: number
   analysis: MaterialAnalysis | null
   analyzing: boolean
   analysisFailed: boolean
@@ -57,6 +61,8 @@ export function Step2Style({
         analyzing={analyzing}
         analysisFailed={analysisFailed}
         hasClaudeKey={hasClaudeKey}
+        materialCount={materialCount}
+        referenceCount={referenceCount}
         onReanalyze={onReanalyze}
       />
 
@@ -90,7 +96,7 @@ export function Step2Style({
             gap: 10,
           }}
         >
-          {reference && (
+          {hasReference && (
             <PresetCard
               active={styleChoice === "reference"}
               label={t.create.referenceFollow.label}
@@ -166,12 +172,16 @@ function AnalysisCard({
   analyzing,
   analysisFailed,
   hasClaudeKey,
+  materialCount,
+  referenceCount,
   onReanalyze,
 }: {
   analysis: MaterialAnalysis | null
   analyzing: boolean
   analysisFailed: boolean
   hasClaudeKey: boolean
+  materialCount: number
+  referenceCount: number
   onReanalyze: () => void
 }) {
   if (!hasClaudeKey) return null
@@ -198,6 +208,10 @@ function AnalysisCard({
           </button>
         )}
       </div>
+
+      <p style={{ margin: 0, fontSize: 11.5, color: "var(--color-primary-dark)", opacity: 0.85 }}>
+        {fmt(t.create.analysisScope, { m: materialCount, r: referenceCount })}
+      </p>
 
       {analyzing ? (
         <p style={{ margin: 0, fontSize: 13, color: "var(--color-primary-dark)" }}>
