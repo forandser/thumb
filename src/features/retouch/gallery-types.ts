@@ -10,9 +10,27 @@ import type { AiErrorCode } from "@/lib/ai/anthropic"
 /** 일괄 AI 처리 중 카드에 보여줄 진행 상태(뱃지와 별개). idle = 진행 아님. */
 export type AiStatus = "idle" | "queued" | "running" | "failed" | "canceled"
 
+/** AI 픽셀 편집(누끼·화질) 직전 스냅샷 — "AI 적용 전으로" 1단계 되돌리기용. */
+export interface AiUndo {
+  /** 직전 AI 소스(File). undefined면 원본 파일을 쓰던 상태. */
+  file?: File
+  /** 직전 편집 상태(색·크롭·회전). */
+  edit: EditState
+  /** 직전 AI 코멘트. */
+  comment?: string
+}
+
 export interface GalleryItem {
   id: string
+  /** 원본 업로드 파일 — AI 편집으로 바뀌지 않는다("원본으로"·Before 비교의 기준). */
   file: File
+  /**
+   * AI 픽셀 편집(누끼·화질) 결과 File. 있으면 이 파일이 활성 작업 소스가 되고
+   * 다운로드·ZIP·썸네일·미리보기가 모두 이 픽셀을 본다. undefined면 원본 사용.
+   */
+  aiFile?: File
+  /** AI 편집 직전 스냅샷("AI 적용 전으로"). */
+  aiUndo?: AiUndo
   /** 원본 파일명(다운로드 파일명·표시용). */
   name: string
   /** 240px 축소본 objectURL(카드 미리보기). revoke는 갤러리 소유. */

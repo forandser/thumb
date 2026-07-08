@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { t } from "@/lib/i18n"
 import { Crop, DEFAULT_EDIT, EditState, isDefaultEdit } from "@/lib/image/types"
 import { makeRotatedSource, type Source } from "@/lib/image/render"
-import { decodeImageFile, makeWorkingSource, imageToAiBase64 } from "@/lib/image/source"
+import {
+  decodeImageFile,
+  makeWorkingSource,
+  imageToAiBase64,
+  sourceMaxSide,
+  AI_MAX_SIDE,
+} from "@/lib/image/source"
 import { validateImageFile } from "@/lib/image/validate"
 import {
   AiError,
@@ -14,7 +20,9 @@ import {
   type AiDiagnosis,
   type AiErrorCode,
 } from "@/lib/ai/anthropic"
+import { fmt } from "@/lib/i18n"
 import type { GalleryItem } from "./gallery-types"
+import { useAiImageEdit, type AiEditKind } from "./useAiImageEdit"
 import { AdjustPanel } from "./AdjustPanel"
 import { DownloadPanel } from "./DownloadPanel"
 import { PreviewStage, CompareStage } from "./Stages"
@@ -52,8 +60,13 @@ export function Workbench({
   onEditCommit,
   onAiApplied,
   onReset,
+  onRestoreOriginal,
+  onAiReplace,
+  onUndoAi,
   apiKey,
   hasKey,
+  geminiKey,
+  hasGeminiKey,
   onNeedKey,
   onSpend,
   selectedCount,
@@ -71,8 +84,16 @@ export function Workbench({
   onEditCommit: (edit: EditState) => void
   onAiApplied: (edit: EditState, comment: string) => void
   onReset: () => void
+  /** AI 소스까지 폐기하고 원본 파일로 복원. */
+  onRestoreOriginal: () => void
+  /** AI 편집 결과 dataURL을 새 작업 소스로 반영. */
+  onAiReplace: (dataUrl: string, kind: AiEditKind) => Promise<void>
+  /** "AI 적용 전으로" — 직전 스냅샷 복원. */
+  onUndoAi: () => void
   apiKey: string
   hasKey: boolean
+  geminiKey: string
+  hasGeminiKey: boolean
   onNeedKey: () => void
   onSpend: (krw: number) => void
   selectedCount: number
@@ -83,7 +104,13 @@ export function Workbench({
   onDismissNotice: () => void
 }) {
   const [img, setImg] = useState<Source | null>(null)
+  // Before/After 비교의 Before 기준 — 원본 파일 소스(AI 소스가 있을 때만 별도 디코드).
+  const [baseImg, setBaseImg] = useState<Source | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // 활성 작업 소스 파일 — AI 편집 결과가 있으면 그 파일, 없으면 원본.
+  const activeFile = item.aiFile ?? item.file
+  const hasAiFile = !!item.aiFile
 
   // 편집 엔진 상태(v0.1 그대로) — 최초 진입값은 사진에 저장된 EditState.
   const [edit, setEdit] = useState<EditState>(item.edit)
@@ -92,11 +119,21 @@ export function Workbench({
   const [history, setHistory] = useState<EditState[]>([])
   const [mode, setMode] = useState<Mode>("preview")
 
-  // AI 상태
-  const [aiRunning, setAiRunning] = useState(false)
+  // 클로드 자동 보정 상태(진단).
+  const [autoRunning, setAutoRunning] = useState(false)
   const [aiError, setAiError] = useState<AiErrorCode | null>(null)
   const [applyOpen, setApplyOpen] = useState(false)
   const runAiAbortRef = useRef<AbortController | null>(null)
+
+  // 나노바나나 픽셀 편집(누끼·화질) — 공통 훅.
+  const aiEdit = useAiImageEdit({
+    geminiKey,
+    hasGeminiKey,
+    onNeedKey,
+    onSpend,
+    onReplaced: onAiReplace,
+  })
+  const anyAiBusy = autoRunning || aiEdit.running !== null
 
   // 방어선 2: 부모가 이 사진의 edit를 외부에서 바꾸면(주로 AI 진단) 편집 엔진을 재시드한다.
   // 자신의 커밋(onEditCommit)은 editVersion을 올리지 않으므로 히스토리가 초기화되지 않는다.
@@ -121,12 +158,12 @@ export function Workbench({
     }
   }, [])
 
-  // 풀 작업 소스 lazy 디코드 (열려 있는 사진만 메모리에 올린다).
+  // 활성 작업 소스 lazy 디코드 (열려 있는 사진만 메모리에 올린다). AI 소스 교체 시 재디코드.
   useEffect(() => {
     let cancelled = false
     setImg(null)
     setError(null)
-    decodeImageFile(item.file)
+    decodeImageFile(activeFile)
       .then((decoded) => {
         if (!cancelled) setImg(makeWorkingSource(decoded))
       })
@@ -136,11 +173,36 @@ export function Workbench({
     return () => {
       cancelled = true
     }
-  }, [item.file])
+  }, [activeFile])
+
+  // Before 비교용 원본 소스 — AI 소스가 있을 때만 원본 파일을 별도 디코드(실물 대조).
+  useEffect(() => {
+    if (!hasAiFile) {
+      setBaseImg(null)
+      return
+    }
+    let cancelled = false
+    decodeImageFile(item.file)
+      .then((decoded) => {
+        if (!cancelled) setBaseImg(makeWorkingSource(decoded))
+      })
+      .catch(() => {
+        /* Before 비교용이라 실패해도 조용히 무시(활성 소스로 대체) */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [item.file, hasAiFile])
 
   const rotatedSource = useMemo(
     () => (img ? makeRotatedSource(img, edit.rotate90) : null),
     [img, edit.rotate90],
+  )
+
+  // Before(원본) 회전 소스 — AI 소스가 있을 때만 별도. 없으면 활성 소스와 동일(현행 동작).
+  const beforeRotated = useMemo(
+    () => (baseImg ? makeRotatedSource(baseImg, edit.rotate90) : null),
+    [baseImg, edit.rotate90],
   )
 
   const stageWrapRef = useRef<HTMLDivElement>(null)
@@ -209,8 +271,12 @@ export function Workbench({
     onEditCommit(prev)
   }, [history, onEditCommit])
 
-  // 원본 복원 — 보정값+AI 코멘트를 함께 초기화.
+  // 원본 복원 — AI 소스가 있으면 그 픽셀까지 폐기(부모가 재디코드·재시드). 없으면 보정만 초기화.
   const reset = useCallback(() => {
+    if (hasAiFile) {
+      onRestoreOriginal()
+      return
+    }
     if (isDefaultEdit(editRef.current)) return
     setHistory((h) => [...h, lastCommitted.current])
     lastCommitted.current = DEFAULT_EDIT
@@ -218,7 +284,7 @@ export function Workbench({
     setEdit(DEFAULT_EDIT)
     setMode("preview")
     onReset()
-  }, [onReset])
+  }, [hasAiFile, onRestoreOriginal, onReset])
 
   const applyCrop = useCallback(
     (crop: Crop) => {
@@ -265,7 +331,7 @@ export function Workbench({
     const controller = new AbortController()
     runAiAbortRef.current = controller
     setAiError(null)
-    setAiRunning(true)
+    setAutoRunning(true)
     try {
       const base64 = imageToAiBase64(img)
       const d = await diagnosePhoto(apiKey, base64, controller.signal)
@@ -278,10 +344,23 @@ export function Workbench({
     } finally {
       if (runAiAbortRef.current === controller) {
         runAiAbortRef.current = null
-        setAiRunning(false)
+        setAutoRunning(false)
       }
     }
   }, [hasKey, onNeedKey, img, apiKey, applyAi, onSpend])
+
+  // 나노바나나 픽셀 편집(누끼·화질) — 현재 회전 소스+편집을 훅에 넘긴다.
+  const runGeminiEdit = useCallback(
+    (kind: AiEditKind) => {
+      if (!rotatedSource) return
+      void aiEdit.run(kind, rotatedSource, editRef.current)
+    },
+    [aiEdit, rotatedSource],
+  )
+
+  // 활성 소스가 1024px보다 크면 화질 개선 결과가 줄어든다는 정직한 안내(차단 안 함).
+  const activeMaxSide = img ? sourceMaxSide(img) : 0
+  const enhanceShrinks = activeMaxSide > AI_MAX_SIDE
 
   if (!img || !rotatedSource) {
     return (
@@ -314,7 +393,7 @@ export function Workbench({
     )
   }
 
-  const showComment = !!item.aiComment && !isDefaultEdit(edit)
+  const showComment = !!item.aiComment && (!isDefaultEdit(edit) || hasAiFile)
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "20px" }}>
@@ -378,11 +457,21 @@ export function Workbench({
         {mode !== "crop" && (
           <aside style={panelCol}>
             <AiPanel
-              running={aiRunning}
-              errorCode={aiError}
+              autoRunning={autoRunning}
+              geminiRunning={aiEdit.running}
+              anyAiBusy={anyAiBusy}
+              autoErrorCode={aiError}
+              geminiErrorCode={aiEdit.error}
               comment={showComment ? item.aiComment : undefined}
-              onRun={runAi}
-              onDismissError={() => setAiError(null)}
+              canUndoAi={!!item.aiUndo}
+              enhanceShrinks={enhanceShrinks}
+              enhanceCurrentPx={activeMaxSide}
+              onRunAuto={runAi}
+              onRunCutout={() => runGeminiEdit("cutout")}
+              onRunEnhance={() => runGeminiEdit("enhance")}
+              onUndoAi={onUndoAi}
+              onDismissAutoError={() => setAiError(null)}
+              onDismissGeminiError={aiEdit.dismissError}
             />
             <div style={{ height: 18 }} />
             <AdjustPanel
@@ -394,7 +483,7 @@ export function Workbench({
               onUndo={undo}
               onReset={reset}
               canUndo={history.length > 0}
-              canReset={!isDefaultEdit(edit)}
+              canReset={!isDefaultEdit(edit) || hasAiFile}
             />
             {totalOthers > 0 && (
               <>
@@ -421,7 +510,12 @@ export function Workbench({
               onCancel={() => setMode("preview")}
             />
           ) : mode === "compare" ? (
-            <CompareStage rotatedSource={rotatedSource} edit={edit} box={box} />
+            <CompareStage
+              rotatedSource={rotatedSource}
+              beforeRotatedSource={beforeRotated ?? undefined}
+              edit={edit}
+              box={box}
+            />
           ) : (
             <PreviewStage rotatedSource={rotatedSource} edit={edit} box={box} />
           )}
@@ -446,26 +540,50 @@ export function Workbench({
   )
 }
 
-/** AI 자동 보정 버튼 + 실행 중 표시 + 코멘트 카드 + 오류 안내. */
+/**
+ * AI 패널 — 클로드 자동 보정 + 나노바나나 픽셀 편집(누끼·화질) + AI 되돌리기 + 코멘트·오류.
+ * 어느 AI든 실행 중이면 모든 버튼을 잠가 동시 호출·비용 경합을 막는다.
+ */
 function AiPanel({
-  running,
-  errorCode,
+  autoRunning,
+  geminiRunning,
+  anyAiBusy,
+  autoErrorCode,
+  geminiErrorCode,
   comment,
-  onRun,
-  onDismissError,
+  canUndoAi,
+  enhanceShrinks,
+  enhanceCurrentPx,
+  onRunAuto,
+  onRunCutout,
+  onRunEnhance,
+  onUndoAi,
+  onDismissAutoError,
+  onDismissGeminiError,
 }: {
-  running: boolean
-  errorCode: AiErrorCode | null
+  autoRunning: boolean
+  geminiRunning: AiEditKind | null
+  anyAiBusy: boolean
+  autoErrorCode: AiErrorCode | null
+  geminiErrorCode: AiErrorCode | null
   comment?: string
-  onRun: () => void
-  onDismissError: () => void
+  canUndoAi: boolean
+  enhanceShrinks: boolean
+  enhanceCurrentPx: number
+  onRunAuto: () => void
+  onRunCutout: () => void
+  onRunEnhance: () => void
+  onUndoAi: () => void
+  onDismissAutoError: () => void
+  onDismissGeminiError: () => void
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* 클로드 자동 보정(진단) */}
       <button
         type="button"
-        onClick={onRun}
-        disabled={running}
+        onClick={onRunAuto}
+        disabled={anyAiBusy}
         style={{
           display: "flex",
           alignItems: "center",
@@ -474,17 +592,18 @@ function AiPanel({
           padding: "12px 16px",
           borderRadius: "var(--radius-sm)",
           border: "none",
-          background: running
+          background: autoRunning
             ? "var(--color-primary-soft)"
             : "linear-gradient(135deg, #F0654A 0%, #FF9A6B 100%)",
-          color: running ? "var(--color-primary-dark)" : "#fff",
+          color: autoRunning ? "var(--color-primary-dark)" : "#fff",
           fontSize: 14,
           fontWeight: 800,
-          cursor: running ? "default" : "pointer",
-          boxShadow: running ? "none" : "0 2px 10px rgba(240,101,74,0.32)",
+          cursor: anyAiBusy ? "default" : "pointer",
+          opacity: !autoRunning && anyAiBusy ? 0.55 : 1,
+          boxShadow: autoRunning ? "none" : "0 2px 10px rgba(240,101,74,0.32)",
         }}
       >
-        {running ? (
+        {autoRunning ? (
           t.ai.running
         ) : (
           <>
@@ -493,6 +612,76 @@ function AiPanel({
           </>
         )}
       </button>
+
+      {/* 나노바나나 픽셀 편집 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h3
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: "var(--color-ink-tertiary)",
+            letterSpacing: 0.3,
+          }}
+        >
+          {t.ai.editSectionTitle}
+        </h3>
+        <EditOpButton
+          icon="🪄"
+          label={t.ai.cutoutBtn}
+          cost={t.ai.geminiCost}
+          runningLabel={t.ai.cutoutRunning}
+          running={geminiRunning === "cutout"}
+          disabled={anyAiBusy}
+          onClick={onRunCutout}
+        />
+        <EditOpButton
+          icon="🔎"
+          label={t.ai.enhanceBtn}
+          cost={t.ai.geminiCost}
+          runningLabel={t.ai.enhanceRunning}
+          running={geminiRunning === "enhance"}
+          disabled={anyAiBusy}
+          onClick={onRunEnhance}
+        />
+        {enhanceShrinks && (
+          <p
+            style={{
+              margin: 0,
+              padding: "8px 10px",
+              borderRadius: "var(--radius-sm)",
+              background: "var(--color-bg-subtle)",
+              color: "var(--color-ink-secondary)",
+              fontSize: 11.5,
+              lineHeight: 1.5,
+            }}
+          >
+            ℹ️ {fmt(t.ai.enhanceLargeInfo, { px: enhanceCurrentPx })}
+          </p>
+        )}
+        {canUndoAi && (
+          <button
+            type="button"
+            onClick={onUndoAi}
+            disabled={anyAiBusy}
+            style={{
+              padding: "9px 14px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--color-line-strong)",
+              background: "var(--color-bg-surface)",
+              color: "var(--color-ink)",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: anyAiBusy ? "default" : "pointer",
+              opacity: anyAiBusy ? 0.55 : 1,
+            }}
+          >
+            ↩ {t.ai.undoAi}
+          </button>
+        )}
+        <p style={{ margin: 0, fontSize: 11, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
+          {t.ai.editHint}
+        </p>
+      </div>
 
       {comment && (
         <div
@@ -513,42 +702,99 @@ function AiPanel({
         </div>
       )}
 
-      {errorCode && (
-        <div
-          role="alert"
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            padding: "10px 12px",
-            borderRadius: "var(--radius-sm)",
-            background: "var(--color-danger-soft, #fdecea)",
-            border: "1px solid var(--color-danger, #d64545)",
-            color: "var(--color-danger, #a62a2a)",
-            fontSize: 12.5,
-            lineHeight: 1.5,
-          }}
-        >
-          <span aria-hidden>⚠️</span>
-          <span style={{ flex: 1 }}>{t.ai.errors[errorCode]}</span>
-          <button
-            type="button"
-            onClick={onDismissError}
-            aria-label={t.keySettings.close}
-            style={{
-              flexShrink: 0,
-              border: "none",
-              background: "none",
-              color: "inherit",
-              fontSize: 14,
-              lineHeight: 1,
-              cursor: "pointer",
-            }}
-          >
-            ✕
-          </button>
-        </div>
+      {autoErrorCode && <AiErrorCard code={autoErrorCode} onDismiss={onDismissAutoError} />}
+      {geminiErrorCode && <AiErrorCard code={geminiErrorCode} onDismiss={onDismissGeminiError} />}
+    </div>
+  )
+}
+
+/** 나노바나나 편집 버튼(누끼·화질 공용) — 아이콘·라벨·건당 비용·실행 중 표시. */
+function EditOpButton({
+  icon,
+  label,
+  cost,
+  runningLabel,
+  running,
+  disabled,
+  onClick,
+}: {
+  icon: string
+  label: string
+  cost: string
+  runningLabel: string
+  running: boolean
+  disabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        padding: "11px 14px",
+        borderRadius: "var(--radius-sm)",
+        border: "1px solid var(--color-line-strong)",
+        background: running ? "var(--color-primary-soft)" : "var(--color-bg-surface)",
+        color: running ? "var(--color-primary-dark)" : "var(--color-ink)",
+        fontSize: 13.5,
+        fontWeight: 700,
+        cursor: disabled ? "default" : "pointer",
+        opacity: !running && disabled ? 0.55 : 1,
+      }}
+    >
+      {running ? (
+        runningLabel
+      ) : (
+        <>
+          <span aria-hidden>{icon}</span> {label}
+          <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.7 }}>{cost}</span>
+        </>
       )}
+    </button>
+  )
+}
+
+/** AI 오류 카드(클로드·나노바나나 공용 — 코드별 i18n 문구). */
+function AiErrorCard({ code, onDismiss }: { code: AiErrorCode; onDismiss: () => void }) {
+  return (
+    <div
+      role="alert"
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 8,
+        padding: "10px 12px",
+        borderRadius: "var(--radius-sm)",
+        background: "var(--color-danger-soft, #fdecea)",
+        border: "1px solid var(--color-danger, #d64545)",
+        color: "var(--color-danger, #a62a2a)",
+        fontSize: 12.5,
+        lineHeight: 1.5,
+      }}
+    >
+      <span aria-hidden>⚠️</span>
+      <span style={{ flex: 1 }}>{t.ai.errors[code]}</span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={t.keySettings.close}
+        style={{
+          flexShrink: 0,
+          border: "none",
+          background: "none",
+          color: "inherit",
+          fontSize: 14,
+          lineHeight: 1,
+          cursor: "pointer",
+        }}
+      >
+        ✕
+      </button>
     </div>
   )
 }

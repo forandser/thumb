@@ -5,8 +5,9 @@ import { isDefaultEdit } from "@/lib/image/types"
 import type { Badge, GalleryItem } from "./gallery-types"
 
 function badgeOf(item: GalleryItem): Badge {
-  if (isDefaultEdit(item.edit)) return "original"
-  if (item.aiComment) return "ai"
+  // AI 소스 교체(누끼·화질)는 edit가 DEFAULT여도 원본이 아니다.
+  if (isDefaultEdit(item.edit) && !item.aiFile) return "original"
+  if (item.aiComment || item.aiFile) return "ai"
   return "manual"
 }
 

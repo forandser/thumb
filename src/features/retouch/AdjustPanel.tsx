@@ -1,7 +1,9 @@
 "use client"
 
-import { t } from "@/lib/i18n"
+import { useState } from "react"
+import { t, fmt } from "@/lib/i18n"
 import { EditState, RANGE, isFieldOver } from "@/lib/image/types"
+import { usePresets, type PresetColor } from "@/lib/storage/presets"
 
 /**
  * 좌측 보정 패널 — 크롭 진입, 회전·수평, 밝기/대비/채도/색온도 슬라이더, 실행취소/원본복원.
@@ -100,6 +102,9 @@ export function AdjustPanel({
         />
       </Group>
 
+      {/* 내 프리셋(색 4필드) */}
+      <PresetsGroup edit={edit} onChange={onChange} onCommit={onCommit} />
+
       {/* 과보정 경고 */}
       {(isFieldOver("saturation", edit.saturation) ||
         isFieldOver("brightness", edit.brightness) ||
@@ -142,6 +147,181 @@ export function AdjustPanel({
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * 내 프리셋 — 색 보정 4필드만 저장/적용(크롭·회전 제외). 전역 localStorage.
+ * 적용은 색 4필드만 병합하므로 크롭·회전·"다른 사진 일괄 적용"과 자연스럽게 조합된다.
+ */
+function PresetsGroup({
+  edit,
+  onChange,
+  onCommit,
+}: {
+  edit: EditState
+  onChange: (partial: Partial<EditState>) => void
+  onCommit: () => void
+}) {
+  const { presets, add, remove, atLimit } = usePresets()
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState("")
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const currentColor: PresetColor = {
+    brightness: edit.brightness,
+    contrast: edit.contrast,
+    saturation: edit.saturation,
+    temperature: edit.temperature,
+  }
+
+  const startNaming = () => {
+    if (atLimit) {
+      setNotice(t.presets.limitReached)
+      return
+    }
+    setNotice(null)
+    setName(fmt(t.presets.defaultName, { n: presets.length + 1 }))
+    setNaming(true)
+  }
+
+  const confirmSave = () => {
+    const ok = add(name, currentColor)
+    if (!ok) {
+      setNotice(t.presets.limitReached)
+      return
+    }
+    setNaming(false)
+    setName("")
+  }
+
+  const apply = (color: PresetColor) => {
+    onChange({
+      brightness: color.brightness,
+      contrast: color.contrast,
+      saturation: color.saturation,
+      temperature: color.temperature,
+    })
+    onCommit()
+  }
+
+  const del = (id: string) => {
+    if (typeof window !== "undefined" && !window.confirm(t.presets.deleteConfirm)) return
+    remove(id)
+  }
+
+  return (
+    <Group title={t.presets.title}>
+      {naming ? (
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            type="text"
+            value={name}
+            placeholder={t.presets.namePlaceholder}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmSave()
+              if (e.key === "Escape") setNaming(false)
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "8px 10px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--color-line-strong)",
+              background: "var(--color-bg-surface)",
+              fontSize: 13,
+              fontFamily: "var(--font-family)",
+            }}
+          />
+          <button type="button" onClick={confirmSave} style={{ ...secondaryBtn, flexShrink: 0 }}>
+            {t.presets.save}
+          </button>
+          <button
+            type="button"
+            onClick={() => setNaming(false)}
+            style={{ ...secondaryBtn, flexShrink: 0 }}
+          >
+            {t.presets.cancel}
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={startNaming} style={secondaryBtn}>
+          ⭐ {t.presets.saveBtn}
+        </button>
+      )}
+
+      {notice && (
+        <p style={{ margin: 0, fontSize: 11.5, color: "var(--color-warning)", lineHeight: 1.5 }}>
+          {notice}
+        </p>
+      )}
+
+      {presets.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 11.5, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
+          {t.presets.empty}
+        </p>
+      ) : (
+        <>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {presets.map((p) => (
+              <span
+                key={p.id}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "5px 6px 5px 10px",
+                  borderRadius: "var(--radius-pill)",
+                  border: "1px solid var(--color-line-strong)",
+                  background: "var(--color-bg-surface)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => apply(p.edit)}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    color: "var(--color-ink)",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    padding: 0,
+                    maxWidth: 140,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {p.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => del(p.id)}
+                  aria-label={t.presets.delete}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    color: "var(--color-ink-tertiary)",
+                    fontSize: 13,
+                    lineHeight: 1,
+                    cursor: "pointer",
+                    padding: "0 2px",
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
+            {t.presets.applyHint}
+          </p>
+        </>
+      )}
+    </Group>
   )
 }
 

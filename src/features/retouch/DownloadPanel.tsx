@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
-import { t } from "@/lib/i18n"
+import { useEffect, useState } from "react"
+import { t, fmt } from "@/lib/i18n"
 import type { EditState } from "@/lib/image/types"
 import { renderEdit } from "@/lib/image/render"
 import { DOWNLOAD_PRESETS, DownloadPreset, canvasToBlob, downloadBlob } from "@/lib/image/download"
+import { runSafeCheck, type SafeCheckResult, type SafeVerdict } from "@/lib/image/safe-check"
 
 /**
  * 다운로드 패널 — 1080 PNG(기본) / 1080 JPG / 쿠팡 1000. 모두 정사각 출력.
@@ -116,6 +117,208 @@ export function DownloadPanel({
         busy={busy === DOWNLOAD_PRESETS.coupang.id}
         onClick={() => doDownload(DOWNLOAD_PRESETS.coupang)}
       />
+
+      <SafeCheckSection rotatedSource={rotatedSource} edit={edit} />
+    </div>
+  )
+}
+
+/**
+ * 플랫폼 세이프 체크 — 쿠팡 규격(1000 정사각 JPEG)으로 최종 출력을 분석해 통과/경고/확인 안내.
+ * 다운로드를 막지 않는다. 보정이 바뀌면 결과를 무효화하고 재검사를 안내한다.
+ */
+function SafeCheckSection({
+  rotatedSource,
+  edit,
+}: {
+  rotatedSource: HTMLCanvasElement
+  edit: EditState
+}) {
+  const [result, setResult] = useState<SafeCheckResult | null>(null)
+  const [stale, setStale] = useState(false)
+  const [running, setRunning] = useState(false)
+
+  // 보정이 바뀌면 이전 결과는 낡았지만 조용히 지우지 않고 "다시 검사" 안내와 함께 남긴다.
+  // (결과가 이유 없이 사라지면 셀러가 당황함 — 재검사 유도가 더 친절.)
+  useEffect(() => {
+    setStale(true)
+  }, [edit, rotatedSource])
+
+  const run = async () => {
+    setRunning(true)
+    try {
+      const preset = DOWNLOAD_PRESETS.coupang
+      const canvas = renderEdit(rotatedSource, edit, {
+        withAdjustments: true,
+        forceSquare: true,
+        targetSize: preset.size,
+      })
+      const blob = await canvasToBlob(canvas, preset)
+      setResult(runSafeCheck(canvas, blob ? blob.size : 0))
+      setStale(false)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        paddingTop: 12,
+        borderTop: "1px solid var(--color-line)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <h3 style={{ fontSize: 13.5, fontWeight: 800 }}>{t.safeCheck.title}</h3>
+      <p style={{ margin: 0, fontSize: 11.5, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
+        {t.safeCheck.intro}
+      </p>
+      <button
+        type="button"
+        onClick={run}
+        disabled={running}
+        style={{
+          alignSelf: "flex-start",
+          padding: "9px 14px",
+          borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--color-line-strong)",
+          background: "var(--color-bg-surface)",
+          color: "var(--color-ink)",
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: running ? "default" : "pointer",
+          opacity: running ? 0.6 : 1,
+        }}
+      >
+        {running ? t.safeCheck.running : result ? `↻ ${t.safeCheck.rerun}` : `✓ ${t.safeCheck.run}`}
+      </button>
+
+      {result && stale && !running && (
+        <p style={{ margin: 0, fontSize: 11.5, color: "var(--color-warning)", lineHeight: 1.5 }}>
+          {t.safeCheck.stale}
+        </p>
+      )}
+
+      {result && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {buildRows(result).map((row) => (
+            <SafeRow key={row.key} verdict={row.verdict} label={row.label} detail={row.detail} />
+          ))}
+          <p
+            style={{
+              margin: "2px 0 0",
+              fontSize: 11,
+              color: "var(--color-ink-tertiary)",
+              lineHeight: 1.5,
+            }}
+          >
+            {t.safeCheck.coupangNote}
+            <br />
+            {t.safeCheck.smartstoreNote}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface SafeRowData {
+  key: string
+  verdict: SafeVerdict
+  label: string
+  detail: string
+}
+
+/** 검사 결과 → 화면 행(라벨·판정·상세 문구). 문구는 여기서 i18n으로 조립한다. */
+function buildRows(r: SafeCheckResult): SafeRowData[] {
+  const pct = (v: number) => Math.round(v * 100)
+  const mb = (bytes: number) => (bytes / (1024 * 1024)).toFixed(2)
+
+  const area =
+    r.productArea.ratio == null
+      ? t.safeCheck.rowAreaUnknown
+      : fmt(t.safeCheck.rowAreaVal, { pct: pct(r.productArea.ratio) })
+
+  const center =
+    r.centering.verdict === "check"
+      ? t.safeCheck.rowCenterUnknown
+      : r.centering.verdict === "pass"
+        ? t.safeCheck.rowCenterOk
+        : t.safeCheck.rowCenterWarn
+
+  const white =
+    r.whiteBg.verdict === "fail"
+      ? fmt(t.safeCheck.rowWhiteBgFail, { pct: pct(r.whiteBg.ratio) })
+      : fmt(t.safeCheck.rowWhiteBgVal, { pct: pct(r.whiteBg.ratio) })
+
+  return [
+    {
+      key: "size",
+      verdict: r.size.verdict,
+      label: t.safeCheck.rowSize,
+      detail: fmt(t.safeCheck.rowSizeVal, { w: r.size.w, h: r.size.h }),
+    },
+    {
+      key: "file",
+      verdict: r.fileSize.verdict,
+      label: t.safeCheck.rowFile,
+      detail: fmt(t.safeCheck.rowFileVal, { mb: mb(r.fileSize.bytes) }),
+    },
+    { key: "white", verdict: r.whiteBg.verdict, label: t.safeCheck.rowWhiteBg, detail: white },
+    { key: "area", verdict: r.productArea.verdict, label: t.safeCheck.rowArea, detail: area },
+    { key: "center", verdict: r.centering.verdict, label: t.safeCheck.rowCenter, detail: center },
+    {
+      key: "text",
+      verdict: "check",
+      label: t.safeCheck.rowText,
+      detail: t.safeCheck.rowTextCheck,
+    },
+  ]
+}
+
+const VERDICT_STYLE: Record<SafeVerdict, { label: string; bg: string; color: string }> = {
+  pass: { label: t.safeCheck.verdictPass, bg: "var(--color-success-soft, #e6f4ea)", color: "#1b7a3d" },
+  warn: { label: t.safeCheck.verdictWarn, bg: "var(--color-warning-soft)", color: "#8a5a08" },
+  fail: { label: t.safeCheck.verdictFail, bg: "var(--color-danger-soft, #fdecea)", color: "#a62a2a" },
+  check: { label: t.safeCheck.verdictCheck, bg: "var(--color-bg-subtle)", color: "var(--color-ink-secondary)" },
+}
+
+function SafeRow({
+  verdict,
+  label,
+  detail,
+}: {
+  verdict: SafeVerdict
+  label: string
+  detail: string
+}) {
+  const v = VERDICT_STYLE[verdict]
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+      <span
+        style={{
+          flexShrink: 0,
+          padding: "2px 8px",
+          borderRadius: "var(--radius-pill)",
+          background: v.bg,
+          color: v.color,
+          fontSize: 10.5,
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+          marginTop: 1,
+        }}
+      >
+        {v.label}
+      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)" }}>{label}</span>
+        <span style={{ fontSize: 11, color: "var(--color-ink-tertiary)", lineHeight: 1.4 }}>
+          {detail}
+        </span>
+      </div>
     </div>
   )
 }

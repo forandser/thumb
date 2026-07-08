@@ -112,3 +112,24 @@ export function imageToAiBase64(src: Source): string {
   const comma = dataUrl.indexOf(",")
   return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl
 }
+
+/** Source(이미지/캔버스)의 최대 변(px). AI 편집 결과가 원본보다 작아지는지 안내에 쓴다. */
+export function sourceMaxSide(src: Source): number {
+  return Math.max(srcW(src), srcH(src))
+}
+
+/**
+ * base64 dataURL을 File로 변환(AI 편집 결과를 새 작업 소스로 삼기 위함).
+ * ZIP/갤러리 카드/다운로드가 모두 File 경로를 타므로, AI 결과도 File로 만들어 교체하면
+ * 기존 파이프라인이 그대로 최신 픽셀을 본다.
+ */
+export function dataUrlToFile(dataUrl: string, name: string): File {
+  const comma = dataUrl.indexOf(",")
+  const head = comma >= 0 ? dataUrl.slice(0, comma) : ""
+  const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl
+  const mime = /data:(.*?)(;base64)?$/.exec(head)?.[1] || "image/png"
+  const bin = atob(b64)
+  const arr = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+  return new File([arr], name, { type: mime })
+}

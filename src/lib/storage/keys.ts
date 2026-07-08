@@ -5,6 +5,8 @@
 export const STORAGE_KEYS = {
   CLAUDE_KEY: "thumb:claude-key",
   GEMINI_KEY: "thumb:gemini-key",
+  /** 내 보정 프리셋(색 4필드) — v0.3. */
+  PRESETS: "thumb:presets",
 } as const
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]

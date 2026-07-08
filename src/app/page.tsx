@@ -19,7 +19,8 @@ export default function Page() {
   const resetSpend = useCallback(() => setAiSpend(0), [])
 
   const hasClaudeKey = keys.claude.trim().length > 0
-  const anyKeyConnected = hasClaudeKey || keys.gemini.trim().length > 0
+  const hasGeminiKey = keys.gemini.trim().length > 0
+  const anyKeyConnected = hasClaudeKey || hasGeminiKey
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -37,6 +38,8 @@ export default function Page() {
           <PhotoRetouch
             apiKey={keys.claude.trim()}
             hasKey={hasClaudeKey}
+            geminiKey={keys.gemini.trim()}
+            hasGeminiKey={hasGeminiKey}
             onNeedKey={() => setSettingsOpen(true)}
             onSpend={addSpend}
           />

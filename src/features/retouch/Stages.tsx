@@ -110,13 +110,18 @@ export function PreviewStage({
   )
 }
 
-/** Before/After 비교 슬라이더 — 가운데 손잡이를 끌어 원본과 보정을 비교. */
+/**
+ * Before/After 비교 슬라이더 — 가운데 손잡이를 끌어 원본과 보정을 비교.
+ * beforeRotatedSource가 있으면(AI 소스 교체 시) Before는 원본 파일 기준으로 그린다(실물 대조).
+ */
 export function CompareStage({
   rotatedSource,
+  beforeRotatedSource,
   edit,
   box,
 }: {
   rotatedSource: HTMLCanvasElement
+  beforeRotatedSource?: HTMLCanvasElement
   edit: EditState
   box: number
 }) {
@@ -132,19 +137,24 @@ export function CompareStage({
     setDisp(d)
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1
     const maxPreview = Math.round(Math.max(d.w, d.h) * dpr)
-    const draw = (ref: React.RefObject<HTMLCanvasElement | null>, withAdjustments: boolean) => {
+    const draw = (
+      ref: React.RefObject<HTMLCanvasElement | null>,
+      source: HTMLCanvasElement,
+      withAdjustments: boolean,
+    ) => {
       const canvas = ref.current
       if (!canvas) return
-      const rendered = renderEdit(rotatedSource, edit, { withAdjustments, maxPreview })
+      const rendered = renderEdit(source, edit, { withAdjustments, maxPreview })
       canvas.width = rendered.width
       canvas.height = rendered.height
       canvas.style.width = `${d.w}px`
       canvas.style.height = `${d.h}px`
       canvas.getContext("2d")?.drawImage(rendered, 0, 0)
     }
-    draw(beforeRef, false)
-    draw(afterRef, true)
-  }, [rotatedSource, edit, box])
+    // Before = 원본 파일 소스(있으면), 보정 없이. After = 활성 소스 + 보정.
+    draw(beforeRef, beforeRotatedSource ?? rotatedSource, false)
+    draw(afterRef, rotatedSource, true)
+  }, [rotatedSource, beforeRotatedSource, edit, box])
 
   const updateFromClient = (clientX: number) => {
     const rect = containerRef.current?.getBoundingClientRect()

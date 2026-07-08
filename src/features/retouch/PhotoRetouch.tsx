@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { t } from "@/lib/i18n"
-import { DEFAULT_EDIT, EditState } from "@/lib/image/types"
+import { DEFAULT_EDIT, EditState, isDefaultEdit } from "@/lib/image/types"
 import { validateImageFile } from "@/lib/image/validate"
-import { decodeImageFile, makeThumb, imageToAiBase64 } from "@/lib/image/source"
+import { decodeImageFile, makeThumb, imageToAiBase64, dataUrlToFile } from "@/lib/image/source"
+import type { AiEditKind } from "./useAiImageEdit"
 import {
   AiError,
   AI_COST_KRW,
@@ -64,11 +65,15 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 export function PhotoRetouch({
   apiKey,
   hasKey,
+  geminiKey,
+  hasGeminiKey,
   onNeedKey,
   onSpend,
 }: {
   apiKey: string
   hasKey: boolean
+  geminiKey: string
+  hasGeminiKey: boolean
   onNeedKey: () => void
   onSpend: (krw: number) => void
 }) {
@@ -250,7 +255,8 @@ export function PhotoRetouch({
 
       let base64: string
       try {
-        const img = await decodeImageFile(item.file)
+        // 단건 작업대 진단(활성 소스)과 일치시킨다 — 누끼/화질로 aiFile이 생겼으면 그 소스를 진단.
+        const img = await decodeImageFile(item.aiFile ?? item.file)
         base64 = imageToAiBase64(img)
       } catch {
         patchItem(id, { aiStatus: "failed", aiErrorCode: "unknown" })
@@ -405,6 +411,104 @@ export function PhotoRetouch({
     [openId, selected],
   )
 
+  // ── AI 픽셀 편집(누끼·화질) 소스 교체 ────────────────────────────────────
+  // 결과 dataURL을 새 File로 만들어 활성 소스로 삼는다 → 다운로드·ZIP·썸네일이 최신 픽셀을 본다.
+  // 직전 (소스·편집) 스냅샷을 aiUndo에 보관해 "AI 적용 전으로"를 지원한다.
+  const applyAiSource = useCallback(
+    async (dataUrl: string, kind: AiEditKind) => {
+      const id = openId
+      if (!id) return
+      const cur = itemsRef.current.find((i) => i.id === id)
+      if (!cur) return
+      const suffix = kind === "cutout" ? "누끼" : "화질"
+      const file = dataUrlToFile(dataUrl, `${cur.name}-${suffix}.png`)
+      const img = await decodeImageFile(file)
+      const thumb = await makeThumb(img)
+      const comment = kind === "cutout" ? t.ai.cutoutDone : t.ai.enhanceDone
+      setItems((prev) =>
+        prev.map((i) => {
+          if (i.id !== id) return i
+          URL.revokeObjectURL(i.thumbUrl)
+          return {
+            ...i,
+            aiFile: file,
+            aiUndo: { file: i.aiFile, edit: i.edit, comment: i.aiComment },
+            edit: DEFAULT_EDIT, // 보정을 구워 보냈으므로 편집은 리셋.
+            editVersion: (i.editVersion ?? 0) + 1,
+            aiComment: comment,
+            thumbUrl: thumb.url,
+            thumbW: thumb.w,
+            thumbH: thumb.h,
+            aiStatus: "idle",
+            aiErrorCode: undefined,
+          }
+        }),
+      )
+    },
+    [openId],
+  )
+
+  // "AI 적용 전으로" — 직전 스냅샷(소스·편집·코멘트) 복원(1단계).
+  const undoAiSource = useCallback(async () => {
+    const id = openId
+    if (!id) return
+    const cur = itemsRef.current.find((i) => i.id === id)
+    if (!cur?.aiUndo) return
+    const snap = cur.aiUndo
+    const decodeSrc = snap.file ?? cur.file
+    const img = await decodeImageFile(decodeSrc)
+    const thumb = await makeThumb(img)
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== id) return i
+        URL.revokeObjectURL(i.thumbUrl)
+        return {
+          ...i,
+          aiFile: snap.file,
+          aiUndo: undefined,
+          edit: snap.edit,
+          editVersion: (i.editVersion ?? 0) + 1,
+          aiComment: snap.comment,
+          thumbUrl: thumb.url,
+          thumbW: thumb.w,
+          thumbH: thumb.h,
+          aiStatus: "idle",
+          aiErrorCode: undefined,
+        }
+      }),
+    )
+  }, [openId])
+
+  // "원본으로" — AI 소스까지 폐기하고 원본 파일·기본 편집으로 되돌린다.
+  const restoreOriginal = useCallback(async () => {
+    const id = openId
+    if (!id) return
+    const cur = itemsRef.current.find((i) => i.id === id)
+    if (!cur) return
+    if (!cur.aiFile && isDefaultEdit(cur.edit)) return
+    let thumbPatch: Partial<GalleryItem> = {}
+    if (cur.aiFile) {
+      const img = await decodeImageFile(cur.file)
+      const thumb = await makeThumb(img)
+      thumbPatch = { thumbUrl: thumb.url, thumbW: thumb.w, thumbH: thumb.h }
+    }
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.id !== id) return i
+        if (i.aiFile) URL.revokeObjectURL(i.thumbUrl)
+        return {
+          ...i,
+          ...thumbPatch,
+          aiFile: undefined,
+          aiUndo: undefined,
+          edit: DEFAULT_EDIT,
+          editVersion: (i.editVersion ?? 0) + 1,
+          aiComment: undefined,
+        }
+      }),
+    )
+  }, [openId])
+
   // ── 렌더 ─────────────────────────────────────────────────────────────────
   if (items.length === 0) {
     return (
@@ -436,8 +540,13 @@ export function PhotoRetouch({
           })
         }
         onReset={() => patchItem(openItem.id, { edit: DEFAULT_EDIT, aiComment: undefined })}
+        onRestoreOriginal={restoreOriginal}
+        onAiReplace={applyAiSource}
+        onUndoAi={undoAiSource}
         apiKey={apiKey}
         hasKey={hasKey}
+        geminiKey={geminiKey}
+        hasGeminiKey={hasGeminiKey}
         onNeedKey={onNeedKey}
         onSpend={onSpend}
         selectedCount={selectedOthers}
