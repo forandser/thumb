@@ -6,21 +6,33 @@ import type { EditState } from "@/lib/image/types"
 import { renderEdit } from "@/lib/image/render"
 import { DOWNLOAD_PRESETS, DownloadPreset, canvasToBlob, downloadBlob } from "@/lib/image/download"
 import { runSafeCheck, type SafeCheckResult, type SafeVerdict } from "@/lib/image/safe-check"
+import { drawAiWatermark, embedAiMetadata } from "@/lib/image/ai-mark"
 
 /**
  * 다운로드 패널 — 1080 PNG(기본) / 1080 JPG / 쿠팡 1000. 모두 정사각 출력.
  * 현재 크롭이 정사각이 아니면 가운데를 잘라 저장한다고 안내하고 [1:1 맞추기] 제공.
+ *
+ * 두 트랙 공용(스펙 §다운로드). AI 생성/편집 결과(aiApplied=true)는 인코딩 직후 AI 표시
+ * 메타데이터를 삽입하고(embedAiMetadata), 워터마크 토글(기본 off)을 함께 노출한다.
+ * onBeforeBlob은 인코딩 직전 최종 캔버스를 후처리하는 훅(제작 트랙의 한글 텍스트 오버레이).
  */
 export function DownloadPanel({
   rotatedSource,
   edit,
   onFitSquare,
+  aiApplied = false,
+  onBeforeBlob,
 }: {
   rotatedSource: HTMLCanvasElement | null
   edit: EditState
   onFitSquare: () => void
+  /** AI 생성/편집 결과 — 메타데이터 삽입 + 워터마크 토글 + 안내를 켠다. */
+  aiApplied?: boolean
+  /** 인코딩 직전 캔버스 후처리(오버레이 등). 워터마크보다 먼저 적용된다. */
+  onBeforeBlob?: (canvas: HTMLCanvasElement) => void
 }) {
   const [busy, setBusy] = useState<string | null>(null)
+  const [watermark, setWatermark] = useState(false)
 
   const effective = effectiveCropDims(rotatedSource, edit)
   const isSquare = effective ? Math.abs(effective.w - effective.h) / Math.max(effective.w, effective.h) < 0.01 : true
@@ -34,7 +46,12 @@ export function DownloadPanel({
         forceSquare: true,
         targetSize: preset.size,
       })
-      const blob = await canvasToBlob(canvas, preset)
+      // 오버레이(상품명·가격) → 워터마크 순서로 최종 캔버스에 굽는다.
+      onBeforeBlob?.(canvas)
+      if (aiApplied && watermark) drawAiWatermark(canvas)
+      let blob = await canvasToBlob(canvas, preset)
+      // AI 결과는 인코딩 직후 메타데이터 삽입(항상). 실패해도 원본 blob으로 저장.
+      if (aiApplied && blob) blob = await embedAiMetadata(blob)
       if (blob) downloadBlob(blob, preset.filename)
     } finally {
       setBusy(null)
@@ -117,6 +134,32 @@ export function DownloadPanel({
         busy={busy === DOWNLOAD_PRESETS.coupang.id}
         onClick={() => doDownload(DOWNLOAD_PRESETS.coupang)}
       />
+
+      {aiApplied && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: "var(--color-ink)",
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={watermark}
+              onChange={(e) => setWatermark(e.target.checked)}
+            />
+            {t.create.watermarkToggle}
+          </label>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
+            {t.create.aiMetaNote}
+          </p>
+        </div>
+      )}
 
       <SafeCheckSection rotatedSource={rotatedSource} edit={edit} />
     </div>

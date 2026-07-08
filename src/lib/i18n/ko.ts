@@ -290,6 +290,178 @@ export const ko = {
     ctaHint: "지금은 '사진 보정' 탭에서 크롭·색감 정리를 먼저 해보세요.",
     goRetouch: "사진 보정 하러 가기",
   },
+  // v0.4 썸네일 제작(생성) 트랙. 프리셋 라벨·검수 항목은 카드/뱃지/툴팁에 노출되므로 여기 모은다.
+  // inspectItems는 UI 표시 겸 클로드 검수 프롬프트의 단일 출처로도 쓴다(리서치 §⑤(a) 원문 그대로).
+  create: {
+    /** 워터마크 캔버스에 렌더되는 문구(우하단 반투명). */
+    watermarkLabel: "AI 생성",
+    /** 연출 프리셋 7종 카드 표시(리서치 §⑤(b)). key는 presets.ts의 PresetKey와 1:1. */
+    presets: {
+      morningMarket: { label: "모닝 마켓", desc: "북향 창 측광에 물방울까지, 데일리 신선함" },
+      premiumDark: { label: "프리미엄 다크", desc: "키아로스쿠로 저조도, 백화점 선물세트 고급감" },
+      juicyCut: { label: "주시 컷", desc: "역광 단면컷, 과육 투과광으로 식욕을 자극" },
+      onTheTable: { label: "온 더 테이블", desc: "컬리풍 식탁 연출, 라이프스타일 제안" },
+      farmFresh: { label: "팜 프레시", desc: "야외 자연광·나무 상자, 농가 직거래 진정성" },
+      studioClean: { label: "스튜디오 클린", desc: "무지 흰 배경 단독컷, 오픈마켓 대표이미지용" },
+      seasonMood: { label: "시즌 무드", desc: "계절 팔레트·소품으로 시즌 기획전" },
+    },
+    /** 레퍼런스 업로드 시 프리셋 대신 추가되는 카드. */
+    referenceFollow: {
+      label: "레퍼런스 따라가기",
+      desc: "올린 참고 사진의 분위기를 분석해 그대로 반영해요",
+    },
+    /** A컷 검수 13항목(리서치 §⑤(a) 원문). 뱃지·툴팁 + 검수 프롬프트 공용. 배열 순서 = id 1..13. */
+    inspectItems: [
+      "광원 방향 일관성 (그림자·하이라이트가 단일 광원과 일치)",
+      "그림자 자연스러움 (접지 그림자 존재, 경도가 광원 크기와 부합)",
+      "과일 개수·배열 일치 (요청 개수 = 실제 개수, 융합·부유 없음)",
+      "품종 정합성 (형태·색·크기가 품종과 일치 — 원본 재료 사진과 대조)",
+      "표면 질감 사실성 (반복 패턴 없는 자연 랜덤성)",
+      "채도 절제 (과채도·형광색 없음, 흰 소품이 흰색으로)",
+      "심도 논리 (초점면 하나, 흐림이 거리순)",
+      "반사·하이라이트 물리성 (물방울·반사가 광원과 논리적 일치)",
+      "플라스틱 질감 배제 (미세 자연 반점 존재)",
+      "신선도 신호 (물방울·과분·단면 수분 중 1개 이상, 시듦·갈변 없음)",
+      "구도 규범 (주인공 명확, 여백 확보, 소품 경쟁 없음)",
+      "크롭·비율 (1:1 내 주인공 잘림 없음, 여백 균형)",
+      "텍스트 무결성 (이미지 내 글자 없음이 기본)",
+    ],
+    /** 후보 카드 뱃지 — "A컷 검수 12/13" (fmt로 {pass}/{total} 치환). */
+    inspectBadge: "A컷 검수 {pass}/{total}",
+    /** 재생성도 불합격일 때 뱃지. */
+    inspectFailedBadge: "검수 미통과",
+    /** 검수 호출 자체가 실패(네트워크·서버 오류 등)했지만 이미지·선택은 살아있을 때 뱃지. */
+    inspectError: "검수 못 마침 (선택 가능)",
+    /** 자동 재생성으로 새로 뽑은 후보임을 알리는 접미(투명성). */
+    regeneratedSuffix: "재생성됨",
+    /** 구도 베리에이션 결과 뱃지(재검수 없음). */
+    variationBadge: "베리에이션",
+    /** 다운로드 패널 안내 — AI 표시 메타데이터 포함됨. */
+    aiMetaNote: "AI 표시 메타데이터가 포함돼 저장돼요.",
+    /** 실물 보존/새로 그리기 모드 라벨. */
+    modePreserve: "실물 보존",
+    modeGenerate: "새로 그리기",
+
+    // ── v0.4 마법사 UI 문구(STEP 1~3) ──────────────────────────────────────
+    // 3단계 마법사·후보 카드·리터치·베리에이션·오버레이·다운로드에 노출되는 셀러용 문구.
+    /** 상단 단계 인디케이터 라벨. */
+    stepUpload: "사진 올리기",
+    stepStyle: "연출 고르기",
+    stepResults: "뽑고 다듬기",
+    stepBadge: "{cur} / {total} 단계",
+    next: "다음",
+    prev: "이전",
+
+    // STEP 1
+    materialTitle: "내 과일 사진 (재료)",
+    materialHint: "이 사진의 픽셀을 실제로 사용해요. 화질이 좋을수록 결과가 좋아요.",
+    materialUpload: "재료 사진 올리기",
+    referenceTitle: "참고하고 싶은 사진 (레퍼런스 · 선택)",
+    referenceHint: "분위기·구도만 참고해요. 저화질이어도 괜찮아요.",
+    referenceUpload: "참고 사진 올리기",
+    referenceBadge: "참조 전용",
+    copyrightWarn:
+      "인터넷에서 가져온 사진은 '레퍼런스'로만 쓰세요. 그대로 복제하면 저작권 문제가 됩니다. 참고 사진의 픽셀은 결과물에 들어가지 않아요.",
+    qualityLow: "이 사진은 화질이 낮아 결과물 품질이 떨어질 수 있어요. (가장 긴 변 {px}px)",
+    qualityGoRetouch: "보정 탭에서 화질 개선 먼저 하기",
+    removeImage: "빼기",
+    needMaterial: "재료 사진을 먼저 올려주세요.",
+    seedNotice: "보정 탭에서 넘어온 사진을 재료로 담았어요.",
+
+    // STEP 2
+    analyzing: "AI가 사진을 살펴보는 중...",
+    analysisFailed: "분석을 건너뛰고 기본 연출로 진행해요. (분석은 프롬프트 품질 보조라 없어도 됩니다)",
+    analysisTitle: "AI 분석",
+    analysisVariety: "품종",
+    analysisCount: "개수",
+    analysisCountUnit: "개",
+    analysisCondition: "상태",
+    analysisReference: "레퍼런스에서 참고할 점",
+    reanalyze: "분석 다시 받기",
+    modeTitle: "제작 방식",
+    modePreserveDesc: "내 과일 그대로, 배경·연출만 교체합니다. (추천 · 안전)",
+    modeGenerateDesc: "연출컷 전용으로 새로 그려요. 대표이미지로는 쓸 수 없어요.",
+    modeGenerateWarn:
+      "새로 그리기는 실물과 달라질 수 있어 쿠팡·네이버 대표이미지로는 쓸 수 없어요. 연출·상세컷 용도로만 쓰세요.",
+    presetTitle: "연출 프리셋",
+    countTitle: "후보 수",
+    countUnit: "장",
+    estimateTitle: "예상 비용",
+    estimateLine: "분석 {analyze}원 + (생성+검수) {per}원 × {n}장 + 재생성 여유 {reserve}원",
+    estimateTotal: "예상 ~{total}원",
+    generate: "생성하기",
+    recommendedBadge: "추천",
+    needKeysGemini: "생성에는 구글(Gemini) 키가 필요해요. 키 설정에서 등록해 주세요.",
+
+    // STEP 3 — 진행·후보
+    progressGenerating: "생성 중...",
+    progressInspecting: "검수 중 ({done}/{total})",
+    progressDone: "완료",
+    progressCanceled: "중단됨",
+    candidateGenerating: "생성 중...",
+    candidateInspecting: "검수 중...",
+    candidateFailed: "생성 실패",
+    candidateLabel: "후보 {n}",
+    select: "이 컷 선택",
+    selected: "선택됨",
+    retry: "다시 생성",
+    failedItemsTitle: "미통과 항목",
+    cancel: "중단",
+    cancelHint: "생성·검수를 멈추면 이미 시작된 호출 비용만 과금돼요.",
+    regenerating: "재생성 중...",
+    inspectSkipped: "검수를 건너뛰었어요 (클로드 키 없음)",
+
+    // STEP 3 — 리터치
+    retouchTitle: "대화형 리터치",
+    retouchPlaceholder: "예: 왼쪽 그림자를 연하게 해줘",
+    retouchApply: "적용",
+    retouchRunning: "말씀대로 다듬는 중...",
+    retouchRevert: "리터치 전으로",
+    retouchCost: "~₩55",
+    retouchHistoryTitle: "최근 리터치",
+
+    // STEP 3 — 베리에이션
+    variationTitle: "같은 구도 더 뽑기",
+    variationBtn: "베리에이션 생성",
+    variationRunning: "앵글을 바꿔 그리는 중...",
+    variationCountLabel: "{n}장",
+    variationHint: "앵글·거리만 바꿔요. 재검수는 하지 않아요(이미 통과한 A컷 기준을 승계).",
+
+    // STEP 3 — 텍스트 오버레이
+    overlayTitle: "글자 얹기",
+    overlayLine1: "상품명 (1줄)",
+    overlayLine2: "가격·뱃지 (1줄)",
+    overlayLine1Placeholder: "예: 햇사과 특품",
+    overlayLine2Placeholder: "예: 5kg 19,900원",
+    overlayPosition: "위치",
+    overlaySize: "크기",
+    overlayColor: "색",
+    overlayPosTopLeft: "상단 왼쪽",
+    overlayPosTopRight: "상단 오른쪽",
+    overlayPosBottomLeft: "하단 왼쪽",
+    overlayPosBottomRight: "하단 오른쪽",
+    overlaySizeS: "작게",
+    overlaySizeM: "보통",
+    overlaySizeL: "크게",
+    overlayColorWhite: "흰색",
+    overlayColorBlack: "검정",
+    overlayColorPoint: "포인트",
+    overlayClear: "글자 지우기",
+    overlayDisabled:
+      "대표이미지 계열(스튜디오 클린 · 실물 보존)에는 글자를 넣을 수 없어요. 쿠팡·네이버 대표이미지는 글자 금지 규정이 있어요.",
+
+    // STEP 3 — 다운로드
+    watermarkToggle: "워터마크 표시 (우하단 'AI 생성')",
+    watermarkHint: "켜면 이미지 우하단에 반투명 'AI 생성' 글자가 함께 저장돼요.",
+
+    // 보정 → 제작 연결
+    sendToCreate: "이 사진으로 썸네일 만들기",
+    /** 보정본을 제작 재료로 넘길 때 붙는 파일명 접미(예: 사과-제작.jpg). */
+    sendToCreateFileSuffix: "제작",
+
+    // 진행 표시(단계 라벨 배열 — 화면설계 §STEP3 진행 표시)
+    pipelineStages: ["생성 중", "검수 중", "완료"],
+  },
 } as const
 
 export type Ko = typeof ko

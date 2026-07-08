@@ -28,6 +28,13 @@ body {
   box-sizing: border-box;
 }
 
+/* 제작 트랙 진행 스피너 회전. */
+@keyframes thumb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* 폼 요소 포커스 링 — 브라우저 기본 검정 아웃라인 대신 포인트 코랄. */
 input:not([type="checkbox"]):not([type="radio"]):focus,
 textarea:focus,

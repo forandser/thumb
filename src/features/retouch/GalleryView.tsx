@@ -327,8 +327,8 @@ function ZipButton({ items, label }: { items: GalleryItem[]; label: string }) {
     setPhase("running")
     try {
       const n = await exportZip(
-        // AI 교체 소스가 있으면 그 파일을 굽는다(다운로드=미리보기 픽셀 원칙).
-        items.map((i) => ({ name: i.name, file: i.aiFile ?? i.file, edit: i.edit })),
+        // AI 교체 소스가 있으면 그 파일을 굽고(다운로드=미리보기 픽셀 원칙), aiApplied면 메타 삽입.
+        items.map((i) => ({ name: i.name, file: i.aiFile ?? i.file, edit: i.edit, aiApplied: !!i.aiFile })),
         preset,
         (done, total) => setProgress({ done, total }),
         controller.signal,

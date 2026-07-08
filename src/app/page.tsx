@@ -4,7 +4,7 @@ import { useCallback, useState } from "react"
 import { TabKey, TopBar } from "@/components/ui/TopBar"
 import { KeySettingsModal } from "@/features/settings/KeySettingsModal"
 import { PhotoRetouch } from "@/features/retouch/PhotoRetouch"
-import { ThumbnailComingSoon } from "@/features/thumbnail/ThumbnailComingSoon"
+import { CreateWizard } from "@/features/create/CreateWizard"
 import { useApiKeys } from "@/lib/storage/api-keys"
 
 export default function Page() {
@@ -17,6 +17,13 @@ export default function Page() {
   const [aiSpend, setAiSpend] = useState(0)
   const addSpend = useCallback((krw: number) => setAiSpend((s) => s + krw), [])
   const resetSpend = useCallback(() => setAiSpend(0), [])
+
+  // 보정 → 제작 연결: 보정 작업대의 활성 이미지를 제작 트랙 재료로 넘긴다(스펙 §STEP1).
+  const [seedFile, setSeedFile] = useState<File | null>(null)
+  const sendToCreate = useCallback((file: File) => {
+    setSeedFile(file)
+    setTab("thumbnail")
+  }, [])
 
   const hasClaudeKey = keys.claude.trim().length > 0
   const hasGeminiKey = keys.gemini.trim().length > 0
@@ -42,9 +49,20 @@ export default function Page() {
             hasGeminiKey={hasGeminiKey}
             onNeedKey={() => setSettingsOpen(true)}
             onSpend={addSpend}
+            onSendToCreate={sendToCreate}
           />
         ) : (
-          <ThumbnailComingSoon onGoRetouch={() => setTab("retouch")} />
+          <CreateWizard
+            claudeKey={keys.claude.trim()}
+            geminiKey={keys.gemini.trim()}
+            hasClaudeKey={hasClaudeKey}
+            hasGeminiKey={hasGeminiKey}
+            onNeedKey={() => setSettingsOpen(true)}
+            onSpend={addSpend}
+            seedFile={seedFile}
+            onSeedConsumed={() => setSeedFile(null)}
+            onGoRetouch={() => setTab("retouch")}
+          />
         )}
       </main>
 

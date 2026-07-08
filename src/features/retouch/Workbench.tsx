@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { t } from "@/lib/i18n"
 import { Crop, DEFAULT_EDIT, EditState, isDefaultEdit } from "@/lib/image/types"
-import { makeRotatedSource, type Source } from "@/lib/image/render"
+import { makeRotatedSource, renderEdit, type Source } from "@/lib/image/render"
 import {
   decodeImageFile,
   makeWorkingSource,
@@ -72,6 +72,7 @@ export function Workbench({
   selectedCount,
   totalOthers,
   onApplyToOthers,
+  onSendToCreate,
   notice,
   onDismissNotice,
 }: {
@@ -99,6 +100,8 @@ export function Workbench({
   selectedCount: number
   totalOthers: number
   onApplyToOthers: (source: EditState, target: "selected" | "all") => number
+  /** 현재 활성 이미지(보정 반영본)를 제작 트랙 재료로 넘긴다. */
+  onSendToCreate: (file: File) => void
   /** 업로드 스킵 등 안내(작업대 직행 시에도 표시). */
   notice: string | null
   onDismissNotice: () => void
@@ -362,6 +365,22 @@ export function Workbench({
   const activeMaxSide = img ? sourceMaxSide(img) : 0
   const enhanceShrinks = activeMaxSide > AI_MAX_SIDE
 
+  // 보정 → 제작 연결 — 현재 보정을 구운 이미지를 File로 만들어 제작 트랙 재료로 넘긴다.
+  const sendToCreate = useCallback(() => {
+    if (!rotatedSource) return
+    const canvas = renderEdit(rotatedSource, editRef.current, {
+      withAdjustments: true,
+      maxPreview: 2048,
+    })
+    canvas.toBlob(
+      (blob) => {
+        if (blob) onSendToCreate(new File([blob], `${item.name}-${t.create.sendToCreateFileSuffix}.jpg`, { type: "image/jpeg" }))
+      },
+      "image/jpeg",
+      0.92,
+    )
+  }, [rotatedSource, onSendToCreate, item.name])
+
   if (!img || !rotatedSource) {
     return (
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "20px" }}>
@@ -521,10 +540,19 @@ export function Workbench({
           )}
         </section>
 
-        {/* 우: 다운로드 */}
+        {/* 우: 다운로드 + 제작 연결 */}
         {mode !== "crop" && (
           <aside style={panelCol}>
-            <DownloadPanel rotatedSource={rotatedSource} edit={edit} onFitSquare={fitSquare} />
+            <DownloadPanel
+              rotatedSource={rotatedSource}
+              edit={edit}
+              onFitSquare={fitSquare}
+              aiApplied={hasAiFile}
+            />
+            <div style={{ height: 14 }} />
+            <button type="button" onClick={sendToCreate} style={sendToCreateBtn}>
+              🍊 {t.create.sendToCreate}
+            </button>
           </aside>
         )}
       </div>
@@ -908,6 +936,18 @@ const primaryToggle: React.CSSProperties = {
   border: "1px solid var(--color-primary)",
   background: "var(--color-primary-soft)",
   color: "var(--color-primary-dark)",
+}
+
+const sendToCreateBtn: React.CSSProperties = {
+  width: "100%",
+  padding: "11px 14px",
+  borderRadius: "var(--radius-sm)",
+  border: "1px solid var(--color-primary)",
+  background: "var(--color-primary-soft)",
+  color: "var(--color-primary-dark)",
+  fontSize: 13.5,
+  fontWeight: 800,
+  cursor: "pointer",
 }
 
 const applyOthersBtn: React.CSSProperties = {

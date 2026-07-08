@@ -99,15 +99,17 @@ function parseRetryInfo(body: GeminiErrorBody | null): number | undefined {
   return undefined
 }
 
+/** 요청 parts 한 조각 — 텍스트 지시 또는 인라인 이미지. */
+type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } }
+
 /**
- * 이미지 1장 편집. base64Jpeg는 접두사 없는 JPEG(줄바꿈 없음), instruction은 편집 지시문.
- * 성공 시 편집된 이미지의 dataURL을 반환한다.
- * 실패는 AiError(code)로 던진다. 취소(AbortError)는 그대로 전파해 호출부가 구분한다.
+ * parts를 실어 나노바나나에 1콜 하고 이미지 dataURL을 돌려받는 공용 코어.
+ * editImage(텍스트+이미지)·generateImage(텍스트 only)가 이 한 곳을 공유한다 —
+ * 에러 매트릭스·재시도 파싱·안전 필터 처리를 두 진입점이 동일하게 타게 하기 위함.
  */
-export async function editImage(
+async function requestGemini(
   apiKey: string,
-  base64Jpeg: string,
-  instruction: string,
+  parts: GeminiPart[],
   signal?: AbortSignal,
 ): Promise<{ dataUrl: string }> {
   let res: Response
@@ -119,15 +121,7 @@ export async function editImage(
         signal,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: instruction },
-                { inline_data: { mime_type: "image/jpeg", data: base64Jpeg } },
-              ],
-            },
-          ],
+          contents: [{ role: "user", parts }],
           generationConfig: { responseModalities: ["IMAGE"] },
         }),
       },
@@ -159,9 +153,9 @@ export async function editImage(
   const finish = (cand?.finishReason ?? "").toUpperCase()
   if (SAFETY_FINISH.has(finish)) throw new AiError("refusal")
 
-  const parts = cand?.content?.parts
-  const inline = Array.isArray(parts)
-    ? parts.find((p) => p?.inlineData?.data)?.inlineData
+  const respParts = cand?.content?.parts
+  const inline = Array.isArray(respParts)
+    ? respParts.find((p) => p?.inlineData?.data)?.inlineData
     : undefined
   if (!inline?.data) {
     // 프롬프트 차단(blockReason)이면 거절, 아니면 빈 응답.
@@ -169,4 +163,39 @@ export async function editImage(
   }
 
   return { dataUrl: `data:${inline.mimeType ?? "image/png"};base64,${inline.data}` }
+}
+
+/**
+ * 이미지 1장 편집(실물 보존 생성·누끼·화질 개선·리터치·베리에이션 공용).
+ * base64Jpeg는 접두사 없는 JPEG(줄바꿈 없음), instruction은 편집 지시문.
+ * 성공 시 편집된 이미지의 dataURL을 반환한다.
+ * 실패는 AiError(code)로 던진다. 취소(AbortError)는 그대로 전파해 호출부가 구분한다.
+ */
+export async function editImage(
+  apiKey: string,
+  base64Jpeg: string,
+  instruction: string,
+  signal?: AbortSignal,
+): Promise<{ dataUrl: string }> {
+  return requestGemini(
+    apiKey,
+    [{ text: instruction }, { inline_data: { mime_type: "image/jpeg", data: base64Jpeg } }],
+    signal,
+  )
+}
+
+/**
+ * text-only 이미지 생성("새로 그리기" 모드 — 연출컷 전용, 재료 픽셀 없이 프롬프트만으로 생성).
+ * prompt는 prompt-engine.buildPrompt({ mode: "generate", ... }) 결과.
+ * 성공 시 생성 이미지의 dataURL을 반환한다. 실패/취소 처리는 editImage와 동일.
+ *
+ * @example
+ *   const { dataUrl } = await generateImage(geminiKey, buildPrompt({ mode: "generate", presetKey }), signal)
+ */
+export async function generateImage(
+  apiKey: string,
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<{ dataUrl: string }> {
+  return requestGemini(apiKey, [{ text: prompt }], signal)
 }

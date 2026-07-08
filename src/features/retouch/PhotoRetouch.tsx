@@ -69,6 +69,7 @@ export function PhotoRetouch({
   hasGeminiKey,
   onNeedKey,
   onSpend,
+  onSendToCreate,
 }: {
   apiKey: string
   hasKey: boolean
@@ -76,6 +77,8 @@ export function PhotoRetouch({
   hasGeminiKey: boolean
   onNeedKey: () => void
   onSpend: (krw: number) => void
+  /** 현재 활성 이미지를 제작 트랙 재료로 넘긴다(보정 → 제작 연결). */
+  onSendToCreate: (file: File) => void
 }) {
   const [items, setItems] = useState<GalleryItem[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -552,6 +555,7 @@ export function PhotoRetouch({
         selectedCount={selectedOthers}
         totalOthers={items.length - 1}
         onApplyToOthers={applyEditToOthers}
+        onSendToCreate={onSendToCreate}
         notice={addNotice}
         onDismissNotice={() => setAddNotice(null)}
       />

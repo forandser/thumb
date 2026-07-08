@@ -10,12 +10,18 @@ import type { EditState } from "./types"
 import { makeRotatedSource, renderEdit } from "./render"
 import { canvasToBlob, downloadBlob, type DownloadPreset } from "./download"
 import { decodeImageFile, makeWorkingSource } from "./source"
+import { embedAiMetadata } from "./ai-mark"
 
 export interface ZipEntry {
   /** 원본 파일명(확장자 포함 가능). */
   name: string
   file: File
   edit: EditState
+  /**
+   * AI 픽셀 편집(누끼·화질) 결과인지. true면 구운 Blob에 AI 표시 메타데이터를 삽입한다
+   * (단건 다운로드와 동일 — AI기본법 표시 요건. 배치 경로 누락 방지).
+   */
+  aiApplied?: boolean
 }
 
 /** 파일명 → 안전한 basename(확장자·경로·금지문자 제거). */
@@ -60,7 +66,9 @@ export async function exportZip(
         forceSquare: true,
         targetSize: preset.size,
       })
-      const blob = await canvasToBlob(canvas, preset)
+      let blob = await canvasToBlob(canvas, preset)
+      // AI 편집 결과는 인코딩 직후 AI 표시 메타데이터 삽입(단건 다운로드와 동일). 실패해도 원본 유지.
+      if (blob && entry.aiApplied) blob = await embedAiMetadata(blob)
       if (blob) {
         // 파일명 충돌 방지: 같은 basename이면 _2, _3...
         let base = `${safeBase(entry.name)}_보정`
