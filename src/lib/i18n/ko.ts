@@ -433,6 +433,8 @@ export const ko = {
     qualityProSlowNote: "최고 품질은 생성이 조금 느려요. 급하지 않을 때 권장해요.",
     estimateTitle: "예상 비용",
     estimateLine: "분석 {analyze}원 + (생성+검수) {per}원 × {n}장 + 재생성 여유 {reserve}원",
+    // 클로드 키가 없으면 분석·검수·자동 재생성이 없어 생성 단가만 과금된다(검수 생략 안내 병기).
+    estimateLineNoInspect: "생성 {per}원 × {n}장 (클로드 키 없음 — 분석·검수 생략)",
     estimateTotal: "예상 ~{total}원",
     generate: "생성하기",
     recommendedBadge: "추천",

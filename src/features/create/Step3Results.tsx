@@ -441,7 +441,11 @@ function SelectedWorkbench({
   const [filmStrength, setFilmStrength] = useState<FilmStrength>("light")
   // 리터치·베리에이션은 회차 품질 티어로 과금되므로(useCreatePipeline: qualityRef 기준),
   // 단가 칩도 같은 값을 노출한다(기본 95 / 최고 190). 정적 "~₩95"면 Pro에서 실제 190원과 어긋난다.
+  // 리터치는 1장 편집이라 장당 단가 그대로 표기한다.
   const actionCostChip = fmt(t.create.retouchCost, { krw: generateCostFor(quality) })
+  // 베리에이션은 varCount(1·2·3)장을 한 번에 생성하고 장마다 과금하므로(runVariation),
+  // 버튼 칩은 장당 단가가 아니라 총액(장당×장수)으로 표기한다 — 장당만 표기하면 최대 3배 언더쿼트.
+  const variationCostChip = fmt(t.create.retouchCost, { krw: generateCostFor(quality) * varCount })
 
   // 선택 후보 이미지를 정사각 작업 소스로 디코드(리터치로 dataUrl이 바뀌면 재디코드).
   useEffect(() => {
@@ -549,7 +553,7 @@ function SelectedWorkbench({
               }
               style={outlineBtnFull}
             >
-              {t.create.variationBtn} · {actionCostChip}
+              {t.create.variationBtn} · {variationCostChip}
             </button>
             <p style={hintText}>{t.create.variationHint}</p>
           </div>

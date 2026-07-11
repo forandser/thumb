@@ -18,7 +18,7 @@ import { AiError, type AiErrorCode } from "@/lib/ai/anthropic"
 import { editImage, generateImage, modelForQuality, type GeminiQuality } from "@/lib/ai/gemini"
 import { generateCostFor, INSPECT_COST_KRW } from "@/lib/ai/costs"
 import { inspectCandidate } from "@/lib/ai/inspect"
-import { appendRetryHint, buildPrompt, VARIATION_INSTRUCTION } from "@/lib/create/prompt-engine"
+import { appendRetryHint, buildPrompt, buildRetouchInstruction, VARIATION_INSTRUCTION } from "@/lib/create/prompt-engine"
 import { imageToAiBase64 } from "@/lib/image/source"
 import { generationInputBase64s, type Candidate, type PipelineConfig, type PipelinePhase } from "./create-types"
 
@@ -307,7 +307,9 @@ export function useCreatePipeline({
       try {
         const dataUrl = await withRetry((s) => genOne(config, prompt, s, true), signal)
         onSpend(generateCostFor(config.quality))
-        patch(id, { dataUrl, status: "done", regenerated: false, inspection: undefined })
+        // inspectSkipped도 함께 초기화한다 — 이 재생성분은 inspectAndMaybeRegen이 다시 검수하므로,
+        // 이전 '검수 생략'(클로드 키 없던 시점) 뱃지를 지워 새 pass/fail 결과가 가려지지 않게 한다.
+        patch(id, { dataUrl, status: "done", regenerated: false, inspection: undefined, inspectSkipped: false })
         // 수동 재생성은 예산과 무관하게 자동 재생성을 허용하지 않는다(reserveRegen: 항상 false).
         await inspectAndMaybeRegen(config, id, dataUrl, signal, () => false)
       } catch (e) {
@@ -387,7 +389,10 @@ export function useCreatePipeline({
       try {
         const base64 = await dataUrlToAiBase64(prev)
         const model = modelForQuality(qualityRef.current)
-        const { dataUrl } = await editImage(geminiKey, base64, instruction, signal, model)
+        // 셀러 자유 문장을 실물 보존 래퍼로 감싸 전달한다(개수·색·형태·과분 불변 + 글자 금지 +
+        // photoreal). Step2 customPrompt와 동일 정책 — 다른 픽셀 편집 경로의 실물 보존 불변식과 일치.
+        const wrapped = buildRetouchInstruction(instruction)
+        const { dataUrl } = await editImage(geminiKey, base64, wrapped, signal, model)
         onSpend(generateCostFor(qualityRef.current))
         const history = [prev, ...(target.retouchHistory ?? [])].slice(0, RETOUCH_HISTORY_MAX)
         patch(id, { dataUrl, retouchHistory: history, retouching: false })

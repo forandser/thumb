@@ -59,7 +59,8 @@ export function Step2Style({
   onGenerate: () => void
   onNeedKey: () => void
 }) {
-  const est = estimateCreateCost(candidateCount, quality)
+  // 클로드 키가 없으면 분석·검수·자동 재생성이 실행되지 않으므로 예상 비용도 생성 단가만 합산한다.
+  const est = estimateCreateCost(candidateCount, quality, hasClaudeKey)
   const recommended = analysis?.recommendedPreset
 
   return (
@@ -186,12 +187,17 @@ export function Step2Style({
             {t.create.estimateTitle}
           </span>
           <span style={{ fontSize: 12.5, color: "var(--color-ink-secondary)" }}>
-            {fmt(t.create.estimateLine, {
-              analyze: est.analyze,
-              per: est.perCandidate,
-              n: est.candidates,
-              reserve: est.retryReserve,
-            })}
+            {est.includesInspect
+              ? fmt(t.create.estimateLine, {
+                  analyze: est.analyze,
+                  per: est.perCandidate,
+                  n: est.candidates,
+                  reserve: est.retryReserve,
+                })
+              : fmt(t.create.estimateLineNoInspect, {
+                  per: est.perCandidate,
+                  n: est.candidates,
+                })}
           </span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>

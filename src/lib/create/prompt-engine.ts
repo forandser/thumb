@@ -61,6 +61,11 @@ const IMPERFECTION_PRESERVE =
   "subtle film grain ISO 400, natural imperfections, avoid an overly perfect plastic look — do not add water droplets or bloom that are not in the source photo"
 const IMPERFECTION_GENERATE =
   "subtle film grain ISO 400, natural imperfections, tiny water droplets, visible natural bloom on the skin"
+// studioClean(디지털 캡처·순백 대표컷) 전용 불완전함 절 — 필름 그레인 문구를 뺀다.
+// 디지털 카메라(Canon 5D) 지시와 'film grain ISO 400'이 충돌하고, 순백(#FFFFFF) 배경에 그레인을
+// 유도하면 쿠팡·네이버 흰배경 규정과 어긋난다(광학 절 제외 skipOptical와 같은 취지의 비대칭 정리).
+const IMPERFECTION_PRESERVE_NO_FILM =
+  "natural imperfections, avoid an overly perfect plastic look — do not add water droplets or bloom that are not in the source photo"
 
 /**
  * 공통 실사 절(v0.6 신설, preserve/generate 공통) — 리서치 §④(플라스틱 질감·과채도·
@@ -68,6 +73,9 @@ const IMPERFECTION_GENERATE =
  */
 const REALISM_CLAUSE =
   "authentic photograph, shot on film, natural film grain, realistic subsurface scattering on the fruit skin, visible natural surface texture and micro-blemishes, true-to-life color (not oversaturated), imperfect organic shapes"
+// studioClean 전용 실사 절 — 'shot on film, natural film grain'을 뺀 디지털 캡처 변형(순백 대표컷).
+const REALISM_CLAUSE_NO_FILM =
+  "authentic photograph, realistic subsurface scattering on the fruit skin, visible natural surface texture and micro-blemishes, true-to-life color (not oversaturated), imperfect organic shapes"
 
 /** 광학 사실성 절(v0.6 신설) — CGI처럼 균일한 배경 보케를 억제한다. */
 const OPTICAL_CLAUSE =
@@ -152,19 +160,29 @@ export function buildPrompt(input: PromptInput): string {
 
   // studioClean은 깔끔한 순백·정면 e-커머스 단독컷이라 배경 보케·렌즈 비네팅 지시(OPTICAL_CLAUSE)를
   // 넣지 않는다 — 필름 스톡 제외(presets.ts)와 같은 취지로, 순백 배경이 어두워지거나 흐려지는 것을 막는다.
-  const skipOptical = preset?.key === "studioClean"
+  // 같은 이유로 필름 그레인 언어(REALISM_CLAUSE·IMPERFECTION_PRESERVE의 'film grain')도 제외한다
+  // (디지털 캡처 지시와 충돌·순백 규정 저하 방지 — 광학 절 제외와 대칭).
+  const isStudioClean = preset?.key === "studioClean"
+  const skipOptical = isStudioClean
 
   // 셀러 자유 입력(있으면)은 스타일 뒤·불완전함/네거티브/PRESERVE_CLAUSE 앞에 얹는다.
   const customBlock = customPromptBlock(input.customPrompt)
+
+  const imperfection =
+    input.mode === "preserve"
+      ? isStudioClean
+        ? IMPERFECTION_PRESERVE_NO_FILM
+        : IMPERFECTION_PRESERVE
+      : IMPERFECTION_GENERATE
 
   const blocks: string[] = [
     subjectBlock(input),
     styleBlock,
     ...(customBlock ? [customBlock] : []),
-    input.mode === "preserve" ? IMPERFECTION_PRESERVE : IMPERFECTION_GENERATE,
+    imperfection,
     // 공통 실사 절 + 광학 사실성 절 — preserve/generate 양쪽에 포함(스펙 §③).
-    // 단 studioClean(순백 클린 단독컷)은 광학 사실성 절을 제외한다.
-    REALISM_CLAUSE,
+    // 단 studioClean(순백 클린 단독컷)은 광학 사실성 절과 필름 그레인 언어를 제외한다.
+    isStudioClean ? REALISM_CLAUSE_NO_FILM : REALISM_CLAUSE,
     ...(skipOptical ? [] : [OPTICAL_CLAUSE]),
     NEGATIVE,
   ]
@@ -184,6 +202,28 @@ export function appendRetryHint(prompt: string, retryHint: string): string {
   if (!hint) return prompt
   // 재생성 힌트에도 실사 절을 재강조(스펙 §③) — 문제 수정 중 다시 매끈해지지 않게.
   return `${prompt} Fix these issues from the previous attempt: ${hint}. Keep it an authentic film photograph with natural grain and true-to-life color, not a smooth CGI render.`
+}
+
+/**
+ * 대화형 리터치 지시 래퍼(스펙 §STEP3, 실물 보존 불변식).
+ *
+ * 셀러가 리터치 입력창에 넣은 자유 문장(instruction)을 Gemini 픽셀 편집에 그대로 넘기면
+ * "사과를 더 빨갛게"·"흠집을 없애줘"·"포도알을 더 많게"처럼 실물을 미화·왜곡하는 요청이
+ * 실제 과일의 색·과분·흠집·개수를 바꿔 저장돼 식품표시광고법(과대·오인) 위반 산출물이 된다.
+ * 그래서 Step2 자유입력(customPrompt)과 동일한 정책으로, 셀러 요청 뒤에 실물 보존 필수 문구
+ * (PRESERVE_CLAUSE: 개수·색·형태·과분 불변)와 텍스트 금지 네거티브(NEGATIVE)를 고가중치로 얹어
+ * 배경·소품·조명만 바꾸도록 강제한다(UI가 이미 '실물 보존·글자 금지는 항상 지켜져요'라고 약속).
+ * 길이는 자유입력과 같은 상한만 컷(과도한 새니타이즈 금지 — 스펙 §①).
+ */
+export function buildRetouchInstruction(instruction: string): string {
+  const req = (instruction ?? "").trim().slice(0, CUSTOM_PROMPT_MAX)
+  return [
+    `Apply this edit requested by the seller: ${req}`,
+    IMPERFECTION_PRESERVE,
+    REALISM_CLAUSE,
+    NEGATIVE,
+    PRESERVE_CLAUSE,
+  ].join(". ") + "."
 }
 
 /**

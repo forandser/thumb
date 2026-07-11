@@ -28,29 +28,47 @@ export const INSPECT_COST_KRW = 75
 
 /** STEP2 예상 비용 분해. UI가 "분석 30 + (생성+검수)×N + 재생성 여유"로 병기한다. */
 export interface CreateCostEstimate {
-  /** 분석 1콜 비용. */
+  /** 분석 1콜 비용. 클로드 키 없으면 분석을 돌리지 않으므로 0. */
   analyze: number
-  /** 후보 1장당 생성+검수 비용(품질에 따라 95+75 또는 190+75). */
+  /** 후보 1장당 비용. 클로드 키 있으면 생성+검수(95+75/190+75), 없으면 생성 단가만. */
   perCandidate: number
   /** 후보 수. */
   candidates: number
-  /** 재생성 여유(회차 전체 2장 상한 = (생성+검수)×2). */
+  /** 재생성 여유(회차 전체 2장 상한 = (생성+검수)×2). 클로드 키 없으면 자동 재생성이 없어 0. */
   retryReserve: number
   /** 재생성 여유까지 포함한 상한 추정 총액. */
   total: number
+  /** 검수(및 분석·자동 재생성) 비용이 포함됐는지 — UI가 예상 비용 문구를 분기하는 데 쓴다. */
+  includesInspect: boolean
 }
 
 /**
  * 후보 수·품질 기준 예상 비용 산출.
  * 재생성은 후보당 1회·회차 전체 2장 상한(스펙 §품질 파이프라인 4)이므로
  * 여유분은 (생성+검수)×2로 고정한다. 품질(기본/최고)에 따라 생성 단가가 갈린다.
+ *
+ * hasClaudeKey=false(제미나이 단독 구성)면 분석·A컷 검수·자동 재생성이 모두 실행되지 않으므로
+ * (CreateWizard.runAnalysis·inspectAndMaybeRegen이 hasClaudeKey 가드로 스킵) 생성 단가만 합산해
+ * 헤드라인 총액이 실제 과금(생성×N)과 어긋나지 않게 한다.
  */
 export function estimateCreateCost(
   candidateCount: number,
   quality: GeminiQuality = "default",
+  hasClaudeKey = true,
 ): CreateCostEstimate {
   const n = Math.max(0, Math.floor(candidateCount))
-  const perCandidate = generateCostFor(quality) + INSPECT_COST_KRW
+  const gen = generateCostFor(quality)
+  if (!hasClaudeKey) {
+    return {
+      analyze: 0,
+      perCandidate: gen,
+      candidates: n,
+      retryReserve: 0,
+      total: gen * n,
+      includesInspect: false,
+    }
+  }
+  const perCandidate = gen + INSPECT_COST_KRW
   const retryReserve = perCandidate * 2
   return {
     analyze: ANALYZE_COST_KRW,
@@ -58,5 +76,6 @@ export function estimateCreateCost(
     candidates: n,
     retryReserve,
     total: ANALYZE_COST_KRW + perCandidate * n + retryReserve,
+    includesInspect: true,
   }
 }
