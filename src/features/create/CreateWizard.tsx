@@ -65,6 +65,8 @@ export function CreateWizard({
 
   const [mode, setMode] = useState<CreateMode>("preserve")
   const [styleChoice, setStyleChoice] = useState<StyleChoice>(DEFAULT_PRESET_KEY)
+  // v0.7 자유 입력 — 프리셋 위에 얹는 셀러 요청(선택). 새로고침 초기화 허용(내부용).
+  const [customPrompt, setCustomPrompt] = useState("")
   const userPickedStyle = useRef(false)
   const [candidateCount, setCandidateCount] = useState(3)
   const [config, setConfig] = useState<PipelineConfig | null>(null)
@@ -317,6 +319,7 @@ export function CreateWizard({
       variety: analysis?.variety,
       count: analysis?.count,
       condition: analysis?.condition,
+      customPrompt: customPrompt.trim() || undefined,
       candidateCount,
     }
     setConfig(cfg)
@@ -333,7 +336,14 @@ export function CreateWizard({
     styleChoice === "reference" ? false : (getPreset(styleChoice)?.heroSafe ?? false)
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 20px" }}>
+    // 빗나간 드래그 드롭 가드 — 파일을 AddTile 밖(본문·기존 타일)에 놓아도 브라우저가 그 파일을
+    // 새 창/현재 창에 열며 SPA를 이탈해 위저드 상태(업로드·대표 지정·STEP2 선택)가 날아가지 않게 한다.
+    // AddTile/드롭존은 자체 onDrop에서 파일을 먼저 처리하므로, 여기로 버블된 드롭은 무시만 한다.
+    <div
+      style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 20px" }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => e.preventDefault()}
+    >
       <StepHeader step={step} onPrev={setStep} pipelineRunning={pipeline.phase === "running"} />
 
       {seedNotice && step === 1 && (
@@ -374,10 +384,12 @@ export function CreateWizard({
           hasGeminiKey={hasGeminiKey}
           mode={mode}
           styleChoice={styleChoice}
+          customPrompt={customPrompt}
           candidateCount={candidateCount}
           onReanalyze={runAnalysis}
           onModeChange={setMode}
           onStyleChange={handleStyleChange}
+          onCustomPromptChange={setCustomPrompt}
           onCandidateCountChange={setCandidateCount}
           onGenerate={handleGenerate}
           onNeedKey={onNeedKey}

@@ -8,8 +8,8 @@ import { CreateWizard } from "@/features/create/CreateWizard"
 import { useApiKeys } from "@/lib/storage/api-keys"
 
 export default function Page() {
-  // v0.1 핵심은 사진 보정 → 작동하는 탭으로 바로 진입.
-  const [tab, setTab] = useState<TabKey>("retouch")
+  // v0.7: 첫 화면을 '썸네일 제작'으로. 키가 없어도 STEP1 업로드는 되고, 생성 단계에서 키를 안내한다.
+  const [tab, setTab] = useState<TabKey>("thumbnail")
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { keys, save } = useApiKeys()
 

@@ -11,9 +11,10 @@ export interface DownloadPreset {
   filename: string
 }
 
+// v0.7: 출력 규격을 1000×1000으로 통일(쿠팡 최소 규격 충족·오픈마켓 대표이미지 안전). 파일명도 1000 반영.
 export const DOWNLOAD_PRESETS: Record<"png" | "jpg" | "coupang", DownloadPreset> = {
-  png: { id: "png", format: "png", size: 1080, filename: "thumbnail-1080.png" },
-  jpg: { id: "jpg", format: "jpeg", size: 1080, quality: 0.92, filename: "thumbnail-1080.jpg" },
+  png: { id: "png", format: "png", size: 1000, filename: "thumbnail-1000.png" },
+  jpg: { id: "jpg", format: "jpeg", size: 1000, quality: 0.92, filename: "thumbnail-1000.jpg" },
   coupang: {
     id: "coupang",
     format: "jpeg",

@@ -1,9 +1,14 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { t, fmt } from "@/lib/i18n"
 import { validateImageFile } from "@/lib/image/validate"
 import type { ImageSlot } from "./create-types"
+
+/** 이미지 파일만 걸러 배열로. 클릭 선택·드래그 드롭 공용(상한·초과 안내는 부모가 처리). */
+function pickImageFiles(list: FileList | null): File[] {
+  return Array.from(list ?? []).filter((f) => validateImageFile(f).ok)
+}
 
 /** 화질 경고 임계(가장 긴 변 px 미만이면 경고). 스펙 §STEP1. */
 const QUALITY_MIN_SIDE = 1000
@@ -183,28 +188,59 @@ function ImageTile({
   )
 }
 
-/** 사진 추가 타일(파일 선택). 일괄 선택분은 한 번에 배열로 넘겨 상한 판정·안내를 일관 처리한다. */
+/**
+ * 사진 추가 타일 — 클릭 선택 + 드래그&드롭(v0.7, 보정 트랙 UploadDropzone 패턴 이식).
+ * 일괄 선택·다중 드롭분은 한 번에 배열로 넘겨 상한 판정·초과 안내를 부모가 일관 처리한다.
+ * 드래그 오버 시 테두리·배경을 강조해 놓을 위치를 알린다.
+ */
 function AddTile({ label, onPick }: { label: string; onPick: (files: File[]) => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
   return (
-    <button type="button" onClick={() => inputRef.current?.click()} style={addTile}>
+    <div
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragging(false)
+        const files = pickImageFiles(e.dataTransfer.files)
+        if (files.length) onPick(files)
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") inputRef.current?.click()
+      }}
+      style={{
+        ...addTile,
+        borderColor: dragging ? "var(--color-primary)" : "var(--color-line-strong)",
+        background: dragging ? "var(--color-primary-soft)" : "var(--color-bg-subtle)",
+        transition: "background 0.15s, border-color 0.15s",
+      }}
+    >
       <span style={{ fontSize: 28 }} aria-hidden>
         ＋
       </span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary)" }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary)", textAlign: "center" }}>
+        {label}
+      </span>
       <input
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp"
         multiple
         onChange={(e) => {
-          const files = Array.from(e.target.files ?? []).filter((f) => validateImageFile(f).ok)
+          const files = pickImageFiles(e.target.files)
           if (files.length) onPick(files)
           e.target.value = ""
         }}
         style={{ display: "none" }}
       />
-    </button>
+    </div>
   )
 }
 

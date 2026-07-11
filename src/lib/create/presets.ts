@@ -1,5 +1,5 @@
 /**
- * 연출 프리셋 7종 데이터 (리서치 §⑤(b) 그대로).
+ * 연출 프리셋 8종 데이터 (리서치 §⑤(b) + v0.7 handHeld 신설).
  *
  * 원리: 프리셋은 "실사 프롬프트의 카메라/조명/배경 블록"을 담는 구조 데이터다.
  * 프롬프트 블록은 이미지 생성 모델(나노바나나)에 들어가는 영어 지시라 여기 둔다
@@ -19,6 +19,7 @@ export type PresetKey =
   | "farmFresh"
   | "studioClean"
   | "seasonMood"
+  | "handHeld"
 
 export interface StylePreset {
   key: PresetKey
@@ -41,10 +42,43 @@ export interface StylePreset {
 }
 
 /**
- * 7종 프리셋. 배열 순서 = 카드 노출 순서(리서치 표 순서).
+ * 8종 프리셋. 배열 순서 = 카드 노출 순서.
+ * v0.7: 실용 구도(흰배경 누끼컷·손에 든 컷·단면컷)를 앞쪽에 배치해 셀러가 먼저 만나게 한다.
+ * 프리셋 key·프롬프트 블록은 불변(코드 안정) — 순서만 조정하고 handHeld를 신설했다.
  * 프롬프트 블록은 prompt-engine이 조립할 때 그대로 삽입된다.
  */
 export const PRESETS: readonly StylePreset[] = [
+  {
+    key: "studioClean",
+    // 스튜디오 클린만 필름 스톡 미병기 — 깔끔한 오픈마켓 단독컷이라 디지털 캡처 유지(스펙 §③).
+    camera: "shot on Canon 5D, 85mm f/8, straight-on product angle, centered with balanced margins",
+    lighting: "a large softbox side light, even soft illumination, minimal soft contact shadow, 5500K",
+    background: "a seamless plain white to cream backdrop, no props, clean e-commerce thumbnail look",
+    allowsTextOverlay: false,
+    heroSafe: true,
+  },
+  {
+    key: "handHeld",
+    // v0.7 신설 — 사람 손이 과일을 자연스럽게 든 라이프스타일 컷(실물감·크기감 전달).
+    camera:
+      "shot on Sony A7, 50mm f/2.0 at eye level, a person's hand naturally holding the fruit toward the camera, on Kodak Portra 400 film",
+    lighting: "warm natural daylight, soft and inviting, gentle side light, 5400K",
+    background:
+      "a softly blurred lifestyle background, natural human hand skin holding the fruit, shallow depth of field",
+    allowsTextOverlay: true,
+    heroSafe: false,
+  },
+  {
+    key: "juicyCut",
+    camera:
+      "100mm macro f/2.8, close-up of a clean cross-section, single focal plane, on Kodak Ektar 100 film",
+    lighting:
+      "backlight passing through the fruit flesh for a translucent glow, juicy specular highlights, 5600K",
+    background:
+      "clean minimal surface with a few water droplets, all attention on the cut section and its inner texture",
+    allowsTextOverlay: true,
+    heroSafe: false,
+  },
   {
     key: "morningMarket",
     camera:
@@ -68,17 +102,6 @@ export const PRESETS: readonly StylePreset[] = [
     heroSafe: false,
   },
   {
-    key: "juicyCut",
-    camera:
-      "100mm macro f/2.8, close-up of a clean cross-section, single focal plane, on Kodak Ektar 100 film",
-    lighting:
-      "backlight passing through the fruit flesh for a translucent glow, juicy specular highlights, 5600K",
-    background:
-      "clean minimal surface with a few water droplets, all attention on the cut section and its inner texture",
-    allowsTextOverlay: true,
-    heroSafe: false,
-  },
-  {
     key: "onTheTable",
     camera:
       "shot on Sony A7, 50mm f/2.0 at a 45-degree angle, shallow depth of field with soft background blur, on Kodak Portra 400 film",
@@ -96,15 +119,6 @@ export const PRESETS: readonly StylePreset[] = [
     background: "a rustic wooden crate with green leaves, farm-direct authenticity, earthy tones",
     allowsTextOverlay: true,
     heroSafe: false,
-  },
-  {
-    key: "studioClean",
-    // 스튜디오 클린만 필름 스톡 미병기 — 깔끔한 오픈마켓 단독컷이라 디지털 캡처 유지(스펙 §③).
-    camera: "shot on Canon 5D, 85mm f/8, straight-on product angle, centered with balanced margins",
-    lighting: "a large softbox side light, even soft illumination, minimal soft contact shadow, 5500K",
-    background: "a seamless plain white to cream backdrop, no props, clean e-commerce thumbnail look",
-    allowsTextOverlay: false,
-    heroSafe: true,
   },
   {
     key: "seasonMood",

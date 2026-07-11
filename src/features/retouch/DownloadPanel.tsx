@@ -9,7 +9,7 @@ import { runSafeCheck, type SafeCheckResult, type SafeVerdict } from "@/lib/imag
 import { drawAiWatermark, embedAiMetadata } from "@/lib/image/ai-mark"
 
 /**
- * 다운로드 패널 — 1080 PNG(기본) / 1080 JPG / 쿠팡 1000. 모두 정사각 출력.
+ * 다운로드 패널 — PNG(기본) / JPG / 쿠팡, 모두 1000×1000 정사각 출력(v0.7 통일).
  * 현재 크롭이 정사각이 아니면 가운데를 잘라 저장한다고 안내하고 [1:1 맞추기] 제공.
  *
  * 두 트랙 공용(스펙 §다운로드). AI 생성/편집 결과(aiApplied=true)는 인코딩 직후 AI 표시
@@ -77,7 +77,11 @@ export function DownloadPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <h3 style={{ fontSize: 14, fontWeight: 800 }}>{t.download.title}</h3>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <h3 style={{ fontSize: 14, fontWeight: 800 }}>{t.download.title}</h3>
+        {/* v0.7 출력 규격 상시 표기 — 1000×1000 통일. */}
+        <span style={sizeNoteChip}>{t.download.sizeNote}</span>
+      </div>
 
       {!isSquare && (
         <div
@@ -418,6 +422,16 @@ function DownloadButton({
       </span>
     </button>
   )
+}
+
+const sizeNoteChip: React.CSSProperties = {
+  padding: "3px 10px",
+  borderRadius: "var(--radius-pill)",
+  background: "var(--color-primary-soft)",
+  color: "var(--color-primary-dark)",
+  fontSize: 11,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
 }
 
 /** 현재 편집의 유효 크롭(rotate90 소스 기준) 픽셀 크기. */

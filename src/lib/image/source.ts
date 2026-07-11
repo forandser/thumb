@@ -10,7 +10,7 @@
  */
 import type { Source } from "./render"
 
-/** 초대형 사진 작업 소스 상한(최대 변 px). 출력이 최대 1080이라 화질 손실 없음. */
+/** 초대형 사진 작업 소스 상한(최대 변 px). 출력이 최대 1000이라 화질 손실 없음. */
 export const MAX_WORKING_SOURCE = 4096
 /** 갤러리 축소본 한 변(px). */
 export const THUMB_SIZE = 240

@@ -1,7 +1,7 @@
 "use client"
 
 import { t, fmt } from "@/lib/i18n"
-import type { CreateMode } from "@/lib/create/prompt-engine"
+import { type CreateMode, CUSTOM_PROMPT_MAX } from "@/lib/create/prompt-engine"
 import { PRESETS } from "@/lib/create/presets"
 import { estimateCreateCost } from "@/lib/ai/costs"
 import type { MaterialAnalysis } from "@/lib/ai/analyze"
@@ -24,10 +24,12 @@ export function Step2Style({
   hasGeminiKey,
   mode,
   styleChoice,
+  customPrompt,
   candidateCount,
   onReanalyze,
   onModeChange,
   onStyleChange,
+  onCustomPromptChange,
   onCandidateCountChange,
   onGenerate,
   onNeedKey,
@@ -42,10 +44,12 @@ export function Step2Style({
   hasGeminiKey: boolean
   mode: CreateMode
   styleChoice: StyleChoice
+  customPrompt: string
   candidateCount: number
   onReanalyze: () => void
   onModeChange: (mode: CreateMode) => void
   onStyleChange: (choice: StyleChoice) => void
+  onCustomPromptChange: (v: string) => void
   onCandidateCountChange: (n: number) => void
   onGenerate: () => void
   onNeedKey: () => void
@@ -115,6 +119,22 @@ export function Step2Style({
             />
           ))}
         </div>
+      </section>
+
+      {/* 원하는 느낌 직접 쓰기 (선택) — 프리셋 위에 셀러 요청을 얹는다(v0.7). */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h3 style={sectionTitle}>{t.create.customPromptTitle}</h3>
+        <textarea
+          value={customPrompt}
+          onChange={(e) => onCustomPromptChange(e.target.value)}
+          placeholder={t.create.customPromptPlaceholder}
+          rows={2}
+          maxLength={CUSTOM_PROMPT_MAX}
+          style={customPromptArea}
+        />
+        <p style={{ margin: 0, fontSize: 11.5, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
+          {t.create.customPromptHint}
+        </p>
       </section>
 
       {/* 후보 수 */}
@@ -312,6 +332,19 @@ function PresetCard({
 }
 
 const sectionTitle: React.CSSProperties = { fontSize: 14, fontWeight: 800 }
+
+const customPromptArea: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: "var(--radius-sm)",
+  border: "1px solid var(--color-line-strong)",
+  background: "var(--color-bg-surface)",
+  color: "var(--color-ink)",
+  fontSize: 13,
+  lineHeight: 1.5,
+  resize: "vertical",
+  fontFamily: "inherit",
+}
 
 const card: React.CSSProperties = {
   display: "flex",

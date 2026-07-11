@@ -82,6 +82,8 @@ export interface PipelineConfig {
   variety?: string
   count?: number
   condition?: string
+  /** 셀러 자유 입력(v0.7, 선택). 프리셋 위에 얹는 추가 요청. 비면 무시. */
+  customPrompt?: string
   candidateCount: number
 }
 

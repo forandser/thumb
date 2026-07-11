@@ -37,7 +37,16 @@ export interface PromptInput {
    * 양수면 "첫 이미지가 기준, 나머지는 같은 상품 다른 각도"라는 다각도 지시를 덧붙인다.
    */
   auxCount?: number
+  /**
+   * 셀러 자유 입력(v0.7, 선택). 프리셋 스타일 위에 셀러 요청을 얹는다. 비면 무시.
+   * 스타일 뒤·네거티브/PRESERVE_CLAUSE 앞에 넣어 실물 보존·텍스트 금지가 항상 우선하게 한다.
+   * 과도한 새니타이즈 없이 그대로 전달하되 최대 길이만 컷(CUSTOM_PROMPT_MAX).
+   */
+  customPrompt?: string
 }
+
+/** 셀러 자유 입력 최대 길이(스펙 §① — 과도한 새니타이즈 없이 길이만 컷). */
+export const CUSTOM_PROMPT_MAX = 300
 
 /**
  * 불완전함 주입(리서치 §④) — 플라스틱 질감·과한 완벽함 방지. 모드별로 분기한다.
@@ -115,6 +124,17 @@ function referenceStyleBlock(referenceStyle: string): string {
 }
 
 /**
+ * 셀러 자유 입력 → 프롬프트 절(v0.7). 비면 null. 최대 길이만 컷(과도한 새니타이즈 금지 — 스펙 §①).
+ * 스타일 뒤에 얹되 뒤의 NEGATIVE·PRESERVE_CLAUSE가 항상 우선(고가중치)이라 "빨갛게"·"글자 넣어"
+ * 같은 요청이 와도 실물 보존·텍스트 금지를 깨지 못한다.
+ */
+function customPromptBlock(customPrompt?: string): string | null {
+  const s = (customPrompt ?? "").trim()
+  if (!s) return null
+  return `Additional request from the seller: ${s.slice(0, CUSTOM_PROMPT_MAX)}`
+}
+
+/**
  * 프롬프트 조립. preserve/generate 공통 본문 + 실물 보존 모드는 PRESERVE_CLAUSE 추가.
  *
  * @example
@@ -134,9 +154,13 @@ export function buildPrompt(input: PromptInput): string {
   // 넣지 않는다 — 필름 스톡 제외(presets.ts)와 같은 취지로, 순백 배경이 어두워지거나 흐려지는 것을 막는다.
   const skipOptical = preset?.key === "studioClean"
 
+  // 셀러 자유 입력(있으면)은 스타일 뒤·불완전함/네거티브/PRESERVE_CLAUSE 앞에 얹는다.
+  const customBlock = customPromptBlock(input.customPrompt)
+
   const blocks: string[] = [
     subjectBlock(input),
     styleBlock,
+    ...(customBlock ? [customBlock] : []),
     input.mode === "preserve" ? IMPERFECTION_PRESERVE : IMPERFECTION_GENERATE,
     // 공통 실사 절 + 광학 사실성 절 — preserve/generate 양쪽에 포함(스펙 §③).
     // 단 studioClean(순백 클린 단독컷)은 광학 사실성 절을 제외한다.

@@ -7,7 +7,7 @@ export const ko = {
     name: "썸네일 제작",
     metaTitle: "썸네일 제작 — 과일 사진 보정·썸네일",
     metaDescription:
-      "과일 사진을 올려 크롭·색감을 다듬고 1080×1080 썸네일로 저장하세요. 키는 내 브라우저에만 저장됩니다.",
+      "과일 사진을 올려 크롭·색감을 다듬고 1000×1000 썸네일로 저장하세요. 키는 내 브라우저에만 저장됩니다.",
   },
   tabs: {
     thumbnail: "썸네일 제작",
@@ -128,10 +128,12 @@ export const ko = {
   },
   download: {
     title: "저장하기",
+    // v0.7 출력 규격 상시 표기 — 다운로드 패널 상단.
+    sizeNote: "1000×1000로 저장돼요",
     notSquareWarn: "정사각형이 아니라 가운데를 잘라 저장돼요. 원하는 부분은 크롭으로 지정하세요.",
     fitSquare: "1:1 맞추기",
-    png: "PNG 고화질 (1080×1080)",
-    jpg: "JPG 변환 (1080×1080)",
+    png: "PNG 고화질 (1000×1000)",
+    jpg: "JPG 변환 (1000×1000)",
     coupang: "쿠팡용 (1000×1000)",
     pngNote: "가장 선명해요. 대표이미지 추천.",
     jpgNote: "용량이 작아요. 품질 92%.",
@@ -298,14 +300,15 @@ export const ko = {
   create: {
     /** 워터마크 캔버스에 렌더되는 문구(우하단 반투명). */
     watermarkLabel: "AI 생성",
-    /** 연출 프리셋 7종 카드 표시(리서치 §⑤(b)). key는 presets.ts의 PresetKey와 1:1. */
+    /** 연출 프리셋 8종 카드 표시(리서치 §⑤(b) + v0.7 handHeld). key는 presets.ts의 PresetKey와 1:1. */
     presets: {
+      studioClean: { label: "흰 배경 누끼컷", desc: "무지 흰 배경 단독컷 · 쿠팡·네이버 대표이미지용" },
+      handHeld: { label: "손에 든 컷", desc: "사람 손에 든 라이프스타일 컷 · 크기감·실물감 전달" },
+      juicyCut: { label: "단면컷", desc: "과일을 자른 단면 클로즈업 · 역광 과육 투과광으로 식욕 자극" },
       morningMarket: { label: "모닝 마켓", desc: "북향 창 측광에 물방울까지, 데일리 신선함" },
       premiumDark: { label: "프리미엄 다크", desc: "키아로스쿠로 저조도, 백화점 선물세트 고급감" },
-      juicyCut: { label: "주시 컷", desc: "역광 단면컷, 과육 투과광으로 식욕을 자극" },
       onTheTable: { label: "온 더 테이블", desc: "컬리풍 식탁 연출, 라이프스타일 제안" },
       farmFresh: { label: "팜 프레시", desc: "야외 자연광·나무 상자, 농가 직거래 진정성" },
-      studioClean: { label: "스튜디오 클린", desc: "무지 흰 배경 단독컷, 오픈마켓 대표이미지용" },
       seasonMood: { label: "시즌 무드", desc: "계절 팔레트·소품으로 시즌 기획전" },
     },
     /** 레퍼런스 업로드 시 프리셋 대신 추가되는 카드. */
@@ -357,11 +360,11 @@ export const ko = {
 
     // STEP 1
     materialTitle: "내 과일 사진 (재료)",
-    materialHint: "이 사진의 픽셀을 실제로 사용해요. 화질이 좋을수록 결과가 좋아요.",
-    materialUpload: "재료 사진 올리기",
+    materialHint: "이 사진의 픽셀을 실제로 사용해요. 화질이 좋을수록 결과가 좋아요. 여기로 끌어다 놓거나 클릭해서 올리세요.",
+    materialUpload: "끌어다 놓기 · 클릭",
     referenceTitle: "참고하고 싶은 사진 (레퍼런스 · 선택)",
-    referenceHint: "분위기·구도만 참고해요. 저화질이어도 괜찮아요.",
-    referenceUpload: "참고 사진 올리기",
+    referenceHint: "분위기·구도만 참고해요. 저화질이어도 괜찮아요. 여기로 끌어다 놓거나 클릭해서 올리세요.",
+    referenceUpload: "끌어다 놓기 · 클릭",
     referenceBadge: "참조 전용",
     copyrightWarn:
       "인터넷에서 가져온 사진은 '레퍼런스'로만 쓰세요. 그대로 복제하면 저작권 문제가 됩니다. 참고 사진의 픽셀은 결과물에 들어가지 않아요.",
@@ -406,6 +409,11 @@ export const ko = {
     modeGenerateWarn:
       "새로 그리기는 실물과 달라질 수 있어 쿠팡·네이버 대표이미지로는 쓸 수 없어요. 연출·상세컷 용도로만 쓰세요.",
     presetTitle: "연출 프리셋",
+    // v0.7 자유 입력 — 프리셋 위에 셀러가 원하는 느낌을 직접 얹는다(선택).
+    customPromptTitle: "원하는 느낌 직접 쓰기 (선택)",
+    customPromptPlaceholder: "예: 햇살 드는 창가, 나무 도마 위에 / 물방울 촉촉하게",
+    customPromptHint:
+      "비워도 돼요. 고른 연출 위에 이 요청을 얹어 만들어요. (100자 안팎 권장 · 실물 보존·글자 금지 규칙은 항상 지켜져요)",
     countTitle: "후보 수",
     countUnit: "장",
     estimateTitle: "예상 비용",
@@ -425,6 +433,8 @@ export const ko = {
     candidateFailed: "생성 실패",
     candidateLabel: "후보 {n}",
     select: "이 컷 선택",
+    // v0.7 출력 규격 상시 표기 — 후보 카드·작업대·다운로드 패널 공용.
+    sizeNote: "1000×1000로 저장돼요",
     // v0.6 다운로드 UX — 후보 카드에서 바로 저장(빠른 저장) / 작업대로 가서 다듬기.
     pickRefine: "고르기 · 다듬기",
     quickSave: "저장",

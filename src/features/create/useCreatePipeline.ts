@@ -105,6 +105,7 @@ function buildConfigPrompt(config: PipelineConfig, regen = false): string {
     variety: config.variety,
     count: config.count,
     condition: config.condition,
+    customPrompt: config.customPrompt,
     auxCount: regen ? 0 : config.auxBase64s.length,
   })
 }

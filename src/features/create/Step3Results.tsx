@@ -45,7 +45,7 @@ function decodeImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * 후보 카드 빠른 저장(v0.6) — 작업대를 거치지 않고 그 자리에서 기본 규격(1080 PNG)으로 저장.
+ * 후보 카드 빠른 저장(v0.6) — 작업대를 거치지 않고 그 자리에서 기본 규격(1000 PNG)으로 저장.
  * dataUrl → 정사각 캔버스 → 필름 그레인(약) → AI 표시 메타데이터 → 저장. 파일명은 후보 index로.
  * 작업대 DownloadPanel과 동일한 렌더/후처리 파이프라인을 타되 오버레이·워터마크·규격 선택은 생략한다.
  */
@@ -68,7 +68,7 @@ async function quickSaveCandidate(
   if (!blob) throw new Error("failed to encode image")
   blob = await embedAiMetadata(blob)
   if (!blob) throw new Error("failed to encode image")
-  downloadBlob(blob, `thumbnail-1080-${candidate.index}.png`)
+  downloadBlob(blob, `thumbnail-1000-${candidate.index}.png`)
 }
 
 /**
@@ -346,6 +346,12 @@ function CandidateCard({
               </button>
             )}
           </div>
+          {selectable && (
+            // v0.7 출력 규격 상시 표기 — 저장 버튼 아래.
+            <span style={{ fontSize: 10.5, color: "var(--color-ink-tertiary)", fontWeight: 700 }}>
+              {t.create.sizeNote}
+            </span>
+          )}
           {saveError && (
             <span style={{ fontSize: 11, color: "var(--color-danger)", lineHeight: 1.4 }} role="alert">
               {t.create.quickSaveError}
