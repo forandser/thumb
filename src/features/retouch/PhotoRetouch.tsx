@@ -18,6 +18,19 @@ import { GalleryView } from "./GalleryView"
 import { Workbench } from "./Workbench"
 import type { BatchState, GalleryItem } from "./gallery-types"
 
+/**
+ * AI 픽셀 편집 종류별 파일명 접미사·완료 안내 문구(존댓말, i18n 경유).
+ * cutout만 분기하고 나머지를 enhance로 뭉뚱그리면 신규 3종(잡티·배경·역광)에 '화질 개선' 문구·
+ * '-화질' 파일명이 잘못 붙는다 → kind별로 정확히 매핑한다.
+ */
+const AI_SOURCE_META: Record<AiEditKind, { suffix: string; comment: string }> = {
+  cutout: { suffix: "누끼", comment: t.ai.cutoutDone },
+  enhance: { suffix: "화질", comment: t.ai.enhanceDone },
+  spot: { suffix: "잡티", comment: t.ai.spotDone },
+  declutter: { suffix: "배경정리", comment: t.ai.declutterDone },
+  relight: { suffix: "조명", comment: t.ai.relightDone },
+}
+
 /** 한 번에 담을 수 있는 최대 사진 수. */
 const MAX_PHOTOS = 30
 /** 일괄 AI 동시 처리 큐 개수. */
@@ -423,11 +436,11 @@ export function PhotoRetouch({
       if (!id) return
       const cur = itemsRef.current.find((i) => i.id === id)
       if (!cur) return
-      const suffix = kind === "cutout" ? "누끼" : "화질"
-      const file = dataUrlToFile(dataUrl, `${cur.name}-${suffix}.png`)
+      const meta = AI_SOURCE_META[kind]
+      const file = dataUrlToFile(dataUrl, `${cur.name}-${meta.suffix}.png`)
       const img = await decodeImageFile(file)
       const thumb = await makeThumb(img)
-      const comment = kind === "cutout" ? t.ai.cutoutDone : t.ai.enhanceDone
+      const comment = meta.comment
       setItems((prev) =>
         prev.map((i) => {
           if (i.id !== id) return i

@@ -488,6 +488,9 @@ export function Workbench({
               onRunAuto={runAi}
               onRunCutout={() => runGeminiEdit("cutout")}
               onRunEnhance={() => runGeminiEdit("enhance")}
+              onRunSpot={() => runGeminiEdit("spot")}
+              onRunDeclutter={() => runGeminiEdit("declutter")}
+              onRunRelight={() => runGeminiEdit("relight")}
               onUndoAi={onUndoAi}
               onDismissAutoError={() => setAiError(null)}
               onDismissGeminiError={aiEdit.dismissError}
@@ -585,6 +588,9 @@ function AiPanel({
   onRunAuto,
   onRunCutout,
   onRunEnhance,
+  onRunSpot,
+  onRunDeclutter,
+  onRunRelight,
   onUndoAi,
   onDismissAutoError,
   onDismissGeminiError,
@@ -601,6 +607,9 @@ function AiPanel({
   onRunAuto: () => void
   onRunCutout: () => void
   onRunEnhance: () => void
+  onRunSpot: () => void
+  onRunDeclutter: () => void
+  onRunRelight: () => void
   onUndoAi: () => void
   onDismissAutoError: () => void
   onDismissGeminiError: () => void
@@ -670,6 +679,34 @@ function AiPanel({
           running={geminiRunning === "enhance"}
           disabled={anyAiBusy}
           onClick={onRunEnhance}
+        />
+        {/* v0.8 보정 리터치 3종 — 실물 보존 지시문(과일 불변) + photoreal 꼬리말. */}
+        <EditOpButton
+          icon="🧹"
+          label={t.ai.spotBtn}
+          cost={t.ai.geminiCost}
+          runningLabel={t.ai.spotRunning}
+          running={geminiRunning === "spot"}
+          disabled={anyAiBusy}
+          onClick={onRunSpot}
+        />
+        <EditOpButton
+          icon="🖼️"
+          label={t.ai.declutterBtn}
+          cost={t.ai.geminiCost}
+          runningLabel={t.ai.declutterRunning}
+          running={geminiRunning === "declutter"}
+          disabled={anyAiBusy}
+          onClick={onRunDeclutter}
+        />
+        <EditOpButton
+          icon="💡"
+          label={t.ai.relightBtn}
+          cost={t.ai.geminiCost}
+          runningLabel={t.ai.relightRunning}
+          running={geminiRunning === "relight"}
+          disabled={anyAiBusy}
+          onClick={onRunRelight}
         />
         {enhanceShrinks && (
           <p

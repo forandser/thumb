@@ -1,10 +1,10 @@
 /**
  * AI 생성물 표시 자동화 (AI기본법 대응 — 의존성 없이 바이너리 조작).
  *
- * 원리: 다운로드 직전 결과 이미지에 "AI 생성" 사실을 두 방식으로 남긴다.
- *   1) 메타데이터(항상): PNG는 IEND 앞에 tEXt 청크, JPEG는 SOI 뒤에 COM(0xFFFE) 세그먼트를
- *      직접 끼워 넣는다. 라이브러리를 쓰지 않고 ArrayBuffer를 손으로 편집한다(새 의존성 금지).
- *   2) 워터마크(토글, 기본 off): 캔버스 우하단에 반투명 "AI 생성" 텍스트를 렌더한다.
+ * 원리: 다운로드 직전 결과 이미지에 "AI 생성" 사실을 안 보이는 메타데이터로 남긴다.
+ *   PNG는 IEND 앞에 tEXt 청크, JPEG는 SOI 뒤에 COM(0xFFFE) 세그먼트를 직접 끼워 넣는다.
+ *   라이브러리를 쓰지 않고 ArrayBuffer를 손으로 편집한다(새 의존성 금지).
+ *   (v0.8: 눈에 보이는 워터마크는 제거했다 — 안 보이는 메타데이터만 유지해 기계판독 고지를 남긴다.)
  *
  * tEXt 청크는 CRC32(type+data)를 정확히 계산해 붙여야 뷰어가 파일을 거부하지 않는다.
  * JPEG COM 길이 필드는 자기 자신(2바이트)을 포함한다. 두 규칙을 그대로 구현했다.
@@ -16,7 +16,6 @@
  * 바이트를 그대로 읽으므로 UTF-8 바이트로 넣는다(ASCII 접두부 "AI-generated image (Gemini)."는
  * 어떤 뷰어에서도 읽힌다). 표시 목적(기계 판독 가능한 AI 고지)에는 충분하다.
  */
-import { t } from "@/lib/i18n"
 
 /** tEXt 청크 키워드(관례적으로 "Comment"). */
 export const AI_MARK_KEYWORD = "Comment"
@@ -250,48 +249,4 @@ export async function verifyAiMetadata(blob: Blob): Promise<boolean> {
   if (isPng(bytes)) return pngHasTextChunk(bytes)
   if (isJpeg(bytes)) return jpegHasComment(bytes)
   return false
-}
-
-/** 워터마크 렌더 옵션. */
-export interface WatermarkOptions {
-  /** 표시 문구(기본 ko.create.watermarkLabel = "AI 생성"). */
-  text?: string
-  /** 캔버스 너비 대비 폰트 크기 비율(기본 0.035). */
-  fontScale?: number
-  /** 텍스트 불투명도 0..1(기본 0.85). */
-  opacity?: number
-}
-
-/**
- * 캔버스 우하단에 반투명 "AI 생성" 워터마크를 렌더한다(캔버스 in-place).
- * 가독성을 위해 어두운 외곽선 + 밝은 채움으로 그린다. 배경 밝기에 관계없이 보이게.
- * 워터마크 토글이 켜졌을 때만 다운로드 파이프라인에서 호출한다.
- *
- * @example
- *   if (watermarkOn) drawAiWatermark(canvas)
- *   const blob = await canvasToBlob(canvas, preset)
- */
-export function drawAiWatermark(canvas: HTMLCanvasElement, opts: WatermarkOptions = {}): void {
-  const ctx = canvas.getContext("2d")
-  if (!ctx) return
-  const text = opts.text ?? t.create.watermarkLabel
-  const fontScale = opts.fontScale ?? 0.035
-  const opacity = opts.opacity ?? 0.85
-
-  const fontSize = Math.max(12, Math.round(canvas.width * fontScale))
-  const pad = Math.round(canvas.width * 0.03)
-
-  ctx.save()
-  ctx.font = `600 ${fontSize}px sans-serif`
-  ctx.textAlign = "right"
-  ctx.textBaseline = "bottom"
-  ctx.lineJoin = "round"
-  ctx.lineWidth = Math.max(2, fontSize / 8)
-  ctx.strokeStyle = `rgba(0,0,0,${0.4 * opacity})`
-  ctx.fillStyle = `rgba(255,255,255,${opacity})`
-  const x = canvas.width - pad
-  const y = canvas.height - pad
-  ctx.strokeText(text, x, y)
-  ctx.fillText(text, x, y)
-  ctx.restore()
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { t, fmt } from "@/lib/i18n"
 import { analyzeMaterial, type MaterialAnalysis } from "@/lib/ai/analyze"
 import { ANALYZE_COST_KRW } from "@/lib/ai/costs"
+import type { GeminiQuality } from "@/lib/ai/gemini"
 import type { CreateMode } from "@/lib/create/prompt-engine"
 import { DEFAULT_PRESET_KEY, getPreset, type PresetKey } from "@/lib/create/presets"
 import { decodeImageFile, imageToAiBase64, sourceMaxSide } from "@/lib/image/source"
@@ -69,6 +70,8 @@ export function CreateWizard({
   const [customPrompt, setCustomPrompt] = useState("")
   const userPickedStyle = useRef(false)
   const [candidateCount, setCandidateCount] = useState(3)
+  // v0.8 품질 티어(기본 3.1 Flash / 최고 3 Pro). 새로고침 초기화 허용(내부용).
+  const [quality, setQuality] = useState<GeminiQuality>("default")
   const [config, setConfig] = useState<PipelineConfig | null>(null)
 
   const analyzeAbortRef = useRef<AbortController | null>(null)
@@ -314,6 +317,7 @@ export function CreateWizard({
       materialBase64: heroB64,
       auxBase64s: auxB64s,
       mode,
+      quality,
       presetKey,
       referenceStyle: analysis?.referenceStyle,
       variety: analysis?.variety,
@@ -386,11 +390,13 @@ export function CreateWizard({
           styleChoice={styleChoice}
           customPrompt={customPrompt}
           candidateCount={candidateCount}
+          quality={quality}
           onReanalyze={runAnalysis}
           onModeChange={setMode}
           onStyleChange={handleStyleChange}
           onCustomPromptChange={setCustomPrompt}
           onCandidateCountChange={setCandidateCount}
+          onQualityChange={setQuality}
           onGenerate={handleGenerate}
           onNeedKey={onNeedKey}
         />
@@ -403,6 +409,9 @@ export function CreateWizard({
           opError={pipeline.opError}
           overlayAllowed={overlayAllowed}
           heroWhiteBg={heroWhiteBg}
+          // 이 회차 생성 시점에 고정된 품질(config.quality)이 실제 과금(qualityRef·config.quality) 기준이다.
+          // 라이브 quality state는 STEP2 재방문으로 드리프트할 수 있어 config 값을 우선한다.
+          quality={config?.quality ?? quality}
           hasGeminiKey={hasGeminiKey}
           onRegenerate={(id) => config && pipeline.regenerateOne(config, id)}
           onVariation={pipeline.runVariation}

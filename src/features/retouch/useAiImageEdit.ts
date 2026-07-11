@@ -14,7 +14,14 @@ import { renderEdit } from "@/lib/image/render"
 import { imageToAiBase64, AI_MAX_SIDE } from "@/lib/image/source"
 import type { EditState } from "@/lib/image/types"
 
-export type AiEditKind = "cutout" | "enhance"
+export type AiEditKind = "cutout" | "enhance" | "spot" | "declutter" | "relight"
+
+/**
+ * 보정 리터치 3종 공통 꼬리말(스펙 §②) — AI 티(플라스틱·CGI)를 억제하고 실사진 질감을 유지시킨다.
+ * 3종 지시문 끝에 붙여 "진짜 사진"임을 반복 강조한다.
+ */
+const PHOTOREAL_TAIL =
+  "photorealistic, looks like a real photograph, natural texture, no plastic/CGI look, no added objects or text."
 
 /**
  * 흰배경 누끼 지시문 — 배경만 순백으로, 상품 픽셀(개수·색·형태·과분)은 절대 불변.
@@ -38,9 +45,48 @@ const ENHANCE_INSTRUCTION = [
   "Return only the edited image.",
 ].join(" ")
 
+/**
+ * 잡티·이물 제거(spot) — 표면·배경의 먼지·이물·잔티만 지우고, 과일 실물은 완전히 보존한다.
+ * 과분(자연 분)·자연 반점 등 진짜 질감을 인위적으로 매끈하게 지우지 않도록 명시한다.
+ */
+const SPOT_INSTRUCTION = [
+  "Remove ONLY dust, lint, stray fibers, small debris, and tiny surface specks from this product photo (on the fruit surface and the background).",
+  "Keep the fruit exactly as it is: do not change its number, color, shape, ripeness, size, natural blemishes, the surface bloom (natural powdery coating), or its real texture.",
+  "Do not smooth away or fabricate texture, and do not add or remove any objects.",
+  PHOTOREAL_TAIL,
+  "Return only the edited image.",
+].join(" ")
+
+/**
+ * 배경 정리(declutter) — 배경의 어수선한 요소만 깔끔히 정돈하고, 과일은 그대로 둔다.
+ * 인위적(스튜디오·합성) 배경을 새로 만들지 않도록 못박아 실사진 느낌을 지킨다.
+ */
+const DECLUTTER_INSTRUCTION = [
+  "Tidy up ONLY the background of this product photo: remove distracting clutter and stray objects and make the background clean and calm.",
+  "Keep the fruit/product pixels exactly as they are (number, color, shape, ripeness, size, texture) and keep it fully in frame.",
+  "Do NOT invent an artificial or studio-composited background; keep the existing background's real look and lighting, just cleaner.",
+  PHOTOREAL_TAIL,
+  "Return only the edited image.",
+].join(" ")
+
+/**
+ * 그림자·역광 보정(relight) — 강한 그림자·역광만 완화해 고른 조명으로, 과일 색·형태는 불변.
+ * 자연광 사진처럼 보이게 하되 인위적 스튜디오 라이팅으로 바꾸지 않는다.
+ */
+const RELIGHT_INSTRUCTION = [
+  "Even out ONLY harsh shadows and backlight in this product photo so the lighting is soft and evenly balanced.",
+  "Keep the fruit's color, shape, number, size, and surface texture unchanged; do not recolor or reshape anything.",
+  "Make it look like natural daylight photography, not artificial studio relighting.",
+  PHOTOREAL_TAIL,
+  "Return only the edited image.",
+].join(" ")
+
 const INSTRUCTIONS: Record<AiEditKind, string> = {
   cutout: CUTOUT_INSTRUCTION,
   enhance: ENHANCE_INSTRUCTION,
+  spot: SPOT_INSTRUCTION,
+  declutter: DECLUTTER_INSTRUCTION,
+  relight: RELIGHT_INSTRUCTION,
 }
 
 export function useAiImageEdit({

@@ -4,6 +4,7 @@ import { t, fmt } from "@/lib/i18n"
 import { type CreateMode, CUSTOM_PROMPT_MAX } from "@/lib/create/prompt-engine"
 import { PRESETS } from "@/lib/create/presets"
 import { estimateCreateCost } from "@/lib/ai/costs"
+import type { GeminiQuality } from "@/lib/ai/gemini"
 import type { MaterialAnalysis } from "@/lib/ai/analyze"
 import type { StyleChoice } from "./create-types"
 
@@ -26,11 +27,13 @@ export function Step2Style({
   styleChoice,
   customPrompt,
   candidateCount,
+  quality,
   onReanalyze,
   onModeChange,
   onStyleChange,
   onCustomPromptChange,
   onCandidateCountChange,
+  onQualityChange,
   onGenerate,
   onNeedKey,
 }: {
@@ -46,15 +49,17 @@ export function Step2Style({
   styleChoice: StyleChoice
   customPrompt: string
   candidateCount: number
+  quality: GeminiQuality
   onReanalyze: () => void
   onModeChange: (mode: CreateMode) => void
   onStyleChange: (choice: StyleChoice) => void
   onCustomPromptChange: (v: string) => void
   onCandidateCountChange: (n: number) => void
+  onQualityChange: (q: GeminiQuality) => void
   onGenerate: () => void
   onNeedKey: () => void
 }) {
-  const est = estimateCreateCost(candidateCount)
+  const est = estimateCreateCost(candidateCount, quality)
   const recommended = analysis?.recommendedPreset
 
   return (
@@ -152,6 +157,26 @@ export function Step2Style({
             </button>
           ))}
         </div>
+      </section>
+
+      {/* 품질(모델 2티어) — 기본 3.1 Flash / 최고 3 Pro. 예상 비용이 선택에 따라 갱신된다. */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <h3 style={sectionTitle}>{t.create.qualityTitle}</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+          <QualityCard
+            active={quality === "default"}
+            title={t.create.qualityDefaultLabel}
+            desc={t.create.qualityDefaultDesc}
+            onClick={() => onQualityChange("default")}
+          />
+          <QualityCard
+            active={quality === "pro"}
+            title={t.create.qualityProLabel}
+            desc={t.create.qualityProDesc}
+            onClick={() => onQualityChange("pro")}
+          />
+        </div>
+        {quality === "pro" && <p style={warnLine}>🐢 {t.create.qualityProSlowNote}</p>}
       </section>
 
       {/* 예상 비용 + 생성 */}
@@ -276,6 +301,37 @@ function AnalysisCard({
 }
 
 function ModeCard({
+  active,
+  title,
+  desc,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  desc: string
+  onClick: () => void
+}) {
+  return (
+    <button type="button" onClick={onClick} style={active ? cardActive : card}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 800 }}>
+        <span
+          aria-hidden
+          style={{
+            width: 14,
+            height: 14,
+            borderRadius: "50%",
+            border: `4px solid ${active ? "var(--color-primary)" : "var(--color-line-strong)"}`,
+          }}
+        />
+        {title}
+      </span>
+      <span style={{ fontSize: 12, color: "var(--color-ink-secondary)", lineHeight: 1.5 }}>{desc}</span>
+    </button>
+  )
+}
+
+/** 품질 티어 카드(라디오형) — 제작 방식 카드와 동일 UX 승계. */
+function QualityCard({
   active,
   title,
   desc,

@@ -181,13 +181,23 @@ export const ko = {
     editSectionTitle: "AI 이미지 편집",
     cutoutBtn: "흰배경 누끼",
     enhanceBtn: "AI 화질 개선",
-    geminiCost: "~₩55",
+    // v0.8 보정 리터치 3종 — 실물(과일)은 그대로, 표면·배경·조명만 손본다.
+    spotBtn: "잡티·이물 제거",
+    declutterBtn: "배경 정리",
+    relightBtn: "그림자·역광 보정",
+    geminiCost: "~₩95",
     cutoutRunning: "배경을 흰색으로 정리하는 중...",
     enhanceRunning: "화질을 다듬는 중...",
+    spotRunning: "먼지·이물을 지우는 중...",
+    declutterRunning: "배경을 정리하는 중...",
+    relightRunning: "조명을 고르게 다듬는 중...",
     cutoutDone: "배경을 순백으로 정리했어요. 과일 자체는 그대로예요.",
     enhanceDone: "노이즈를 줄이고 선명하게 다듬었어요. 색·구도·개수는 그대로예요.",
+    spotDone: "먼지·이물을 지웠어요. 과일 자체는 그대로예요.",
+    declutterDone: "배경을 깔끔하게 정리했어요. 과일 자체는 그대로예요.",
+    relightDone: "그림자·역광을 고르게 다듬었어요. 색·형태·개수는 그대로예요.",
     undoAi: "AI 적용 전으로",
-    editHint: "누끼·화질 개선은 구글(Gemini) 키가 필요해요. 과일 자체(색·개수·형태)는 바꾸지 않아요.",
+    editHint: "AI 이미지 편집은 구글(Gemini) 키가 필요해요. 과일 자체(색·개수·형태)는 바꾸지 않아요.",
     enhanceLargeInfo:
       "이 사진은 이미 충분히 커요 ({px}px). AI 이미지 편집(흰배경 누끼·화질 개선) 결과는 약 1024px로 줄어들어요 — 썸네일 용도에만 권장해요.",
     errors: {
@@ -298,8 +308,6 @@ export const ko = {
   // v0.4 썸네일 제작(생성) 트랙. 프리셋 라벨·검수 항목은 카드/뱃지/툴팁에 노출되므로 여기 모은다.
   // inspectItems는 UI 표시 겸 클로드 검수 프롬프트의 단일 출처로도 쓴다(리서치 §⑤(a) 원문 그대로).
   create: {
-    /** 워터마크 캔버스에 렌더되는 문구(우하단 반투명). */
-    watermarkLabel: "AI 생성",
     /** 연출 프리셋 8종 카드 표시(리서치 §⑤(b) + v0.7 handHeld). key는 presets.ts의 PresetKey와 1:1. */
     presets: {
       studioClean: { label: "흰 배경 누끼컷", desc: "무지 흰 배경 단독컷 · 쿠팡·네이버 대표이미지용" },
@@ -342,8 +350,8 @@ export const ko = {
     regeneratedSuffix: "재생성됨",
     /** 구도 베리에이션 결과 뱃지(재검수 없음). */
     variationBadge: "베리에이션",
-    /** 다운로드 패널 안내 — AI 표시 메타데이터 포함됨. */
-    aiMetaNote: "AI 표시 메타데이터가 포함돼 저장돼요.",
+    /** 다운로드 패널 안내 — 안 보이는 AI 표시 메타데이터가 포함됨(v0.8: 가시 워터마크 제거). */
+    aiMetaNote: "이미지에는 눈에 보이지 않는 AI 표시가 함께 저장돼요.",
     /** 실물 보존/새로 그리기 모드 라벨. */
     modePreserve: "실물 보존",
     modeGenerate: "새로 그리기",
@@ -416,6 +424,13 @@ export const ko = {
       "비워도 돼요. 고른 연출 위에 이 요청을 얹어 만들어요. (100자 안팎 권장 · 실물 보존·글자 금지 규칙은 항상 지켜져요)",
     countTitle: "후보 수",
     countUnit: "장",
+    // v0.8 모델 2티어 — 품질 선택. 예상 비용이 선택에 따라 갱신된다.
+    qualityTitle: "품질",
+    qualityDefaultLabel: "기본 (3.1 Flash)",
+    qualityDefaultDesc: "장당 ~95원 · 빠르고 충분한 품질 (추천)",
+    qualityProLabel: "최고 품질 (3 Pro)",
+    qualityProDesc: "장당 ~190원 · 디테일·완성도 우선",
+    qualityProSlowNote: "최고 품질은 생성이 조금 느려요. 급하지 않을 때 권장해요.",
     estimateTitle: "예상 비용",
     estimateLine: "분석 {analyze}원 + (생성+검수) {per}원 × {n}장 + 재생성 여유 {reserve}원",
     estimateTotal: "예상 ~{total}원",
@@ -454,7 +469,8 @@ export const ko = {
     retouchApply: "적용",
     retouchRunning: "말씀대로 다듬는 중...",
     retouchRevert: "리터치 전으로",
-    retouchCost: "~₩55",
+    // 제작 트랙 개별 액션(리터치·베리에이션) 단가 칩 — 회차 품질(기본 95 / 최고 190)에 따라 fmt로 갱신.
+    retouchCost: "~₩{krw}",
     retouchHistoryTitle: "최근 리터치",
 
     // STEP 3 — 베리에이션
@@ -486,10 +502,6 @@ export const ko = {
     overlayClear: "글자 지우기",
     overlayDisabled:
       "대표이미지 계열(스튜디오 클린 · 실물 보존)에는 글자를 넣을 수 없어요. 쿠팡·네이버 대표이미지는 글자 금지 규정이 있어요.",
-
-    // STEP 3 — 다운로드
-    watermarkToggle: "워터마크 표시 (우하단 'AI 생성')",
-    watermarkHint: "켜면 이미지 우하단에 반투명 'AI 생성' 글자가 함께 저장돼요.",
 
     // STEP 3 — 필름 질감(v0.6 후처리) — 미리보기·저장에 동일 적용(화면=저장).
     filmTextureTitle: "필름 질감",

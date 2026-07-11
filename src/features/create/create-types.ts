@@ -7,6 +7,7 @@
  */
 import type { InspectionResult } from "@/lib/ai/inspect"
 import type { AiErrorCode } from "@/lib/ai/anthropic"
+import type { GeminiQuality } from "@/lib/ai/gemini"
 import type { CreateMode } from "@/lib/create/prompt-engine"
 import type { PresetKey } from "@/lib/create/presets"
 
@@ -76,6 +77,11 @@ export interface PipelineConfig {
    */
   auxBase64s: string[]
   mode: CreateMode
+  /**
+   * 품질 티어(v0.8). "default"=3.1 Flash(~95원) / "pro"=3 Pro(~190원).
+   * 생성·재생성·리터치·베리에이션 모델과 과금 단가를 이 값이 결정한다.
+   */
+  quality: GeminiQuality
   /** 프리셋 key. 레퍼런스 따라가기면 null. */
   presetKey: PresetKey | null
   referenceStyle?: string

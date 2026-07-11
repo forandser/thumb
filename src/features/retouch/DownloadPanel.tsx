@@ -6,14 +6,15 @@ import type { EditState } from "@/lib/image/types"
 import { renderEdit } from "@/lib/image/render"
 import { DOWNLOAD_PRESETS, DownloadPreset, canvasToBlob, downloadBlob } from "@/lib/image/download"
 import { runSafeCheck, type SafeCheckResult, type SafeVerdict } from "@/lib/image/safe-check"
-import { drawAiWatermark, embedAiMetadata } from "@/lib/image/ai-mark"
+import { embedAiMetadata } from "@/lib/image/ai-mark"
 
 /**
  * 다운로드 패널 — PNG(기본) / JPG / 쿠팡, 모두 1000×1000 정사각 출력(v0.7 통일).
  * 현재 크롭이 정사각이 아니면 가운데를 잘라 저장한다고 안내하고 [1:1 맞추기] 제공.
  *
  * 두 트랙 공용(스펙 §다운로드). AI 생성/편집 결과(aiApplied=true)는 인코딩 직후 AI 표시
- * 메타데이터를 삽입하고(embedAiMetadata), 워터마크 토글(기본 off)을 함께 노출한다.
+ * 메타데이터를 삽입하고(embedAiMetadata), 안 보이는 AI 표시가 포함된다는 안내를 노출한다.
+ * (v0.8: 눈에 보이는 워터마크는 제거 — 메타데이터만 유지.)
  * onBeforeBlob은 인코딩 직전 최종 캔버스를 후처리하는 훅(제작 트랙의 한글 텍스트 오버레이).
  */
 export function DownloadPanel({
@@ -26,13 +27,12 @@ export function DownloadPanel({
   rotatedSource: HTMLCanvasElement | null
   edit: EditState
   onFitSquare: () => void
-  /** AI 생성/편집 결과 — 메타데이터 삽입 + 워터마크 토글 + 안내를 켠다. */
+  /** AI 생성/편집 결과 — 메타데이터 삽입 + 안내를 켠다. */
   aiApplied?: boolean
-  /** 인코딩 직전 캔버스 후처리(오버레이 등). 워터마크보다 먼저 적용된다. */
+  /** 인코딩 직전 캔버스 후처리(오버레이 등). */
   onBeforeBlob?: (canvas: HTMLCanvasElement) => void
 }) {
   const [busy, setBusy] = useState<string | null>(null)
-  const [watermark, setWatermark] = useState(false)
 
   const effective = effectiveCropDims(rotatedSource, edit)
   const isSquare = effective ? Math.abs(effective.w - effective.h) / Math.max(effective.w, effective.h) < 0.01 : true
@@ -46,9 +46,8 @@ export function DownloadPanel({
         forceSquare: true,
         targetSize: preset.size,
       })
-      // 오버레이(상품명·가격) → 워터마크 순서로 최종 캔버스에 굽는다.
+      // 오버레이(상품명·가격)를 최종 캔버스에 굽는다.
       onBeforeBlob?.(canvas)
-      if (aiApplied && watermark) drawAiWatermark(canvas)
       let blob = await canvasToBlob(canvas, preset)
       // AI 결과는 인코딩 직후 메타데이터 삽입(항상). 실패해도 원본 blob으로 저장.
       if (aiApplied && blob) blob = await embedAiMetadata(blob)
@@ -140,29 +139,9 @@ export function DownloadPanel({
       />
 
       {aiApplied && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: "var(--color-ink)",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={watermark}
-              onChange={(e) => setWatermark(e.target.checked)}
-            />
-            {t.create.watermarkToggle}
-          </label>
-          <p style={{ margin: 0, fontSize: 11, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
-            {t.create.aiMetaNote}
-          </p>
-        </div>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--color-ink-tertiary)", lineHeight: 1.5 }}>
+          {t.create.aiMetaNote}
+        </p>
       )}
 
       <SafeCheckSection rotatedSource={rotatedSource} edit={edit} onBeforeBlob={onBeforeBlob} />

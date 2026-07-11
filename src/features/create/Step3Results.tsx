@@ -14,6 +14,8 @@ import {
   failedItems,
 } from "@/lib/ai/inspect"
 import type { AiErrorCode } from "@/lib/ai/anthropic"
+import { generateCostFor } from "@/lib/ai/costs"
+import type { GeminiQuality } from "@/lib/ai/gemini"
 import {
   DEFAULT_OVERLAY,
   drawTextOverlay,
@@ -81,6 +83,7 @@ export function Step3Results({
   opError,
   overlayAllowed,
   heroWhiteBg,
+  quality,
   hasGeminiKey,
   onRegenerate,
   onVariation,
@@ -97,6 +100,8 @@ export function Step3Results({
   overlayAllowed: boolean
   /** 흰 배경 대표이미지 프리셋(studioClean 등) — 필름 비네팅을 꺼 순백 모서리를 유지한다. */
   heroWhiteBg: boolean
+  /** 이 회차 품질 티어 — 리터치·베리에이션 단가 칩을 실제 과금(기본 95 / 최고 190)에 맞춰 표기. */
+  quality: GeminiQuality
   hasGeminiKey: boolean
   onRegenerate: (id: string) => void
   onVariation: (sourceDataUrl: string, n: number) => void
@@ -128,6 +133,7 @@ export function Step3Results({
           candidate={selected}
           overlayAllowed={overlayAllowed}
           heroWhiteBg={heroWhiteBg}
+          quality={quality}
           hasGeminiKey={hasGeminiKey}
           onBack={() => setSelectedId(null)}
           onVariation={onVariation}
@@ -409,6 +415,7 @@ function SelectedWorkbench({
   candidate,
   overlayAllowed,
   heroWhiteBg,
+  quality,
   hasGeminiKey,
   onBack,
   onVariation,
@@ -419,6 +426,7 @@ function SelectedWorkbench({
   candidate: Candidate
   overlayAllowed: boolean
   heroWhiteBg: boolean
+  quality: GeminiQuality
   hasGeminiKey: boolean
   onBack: () => void
   onVariation: (sourceDataUrl: string, n: number) => void
@@ -431,6 +439,9 @@ function SelectedWorkbench({
   const [retouchText, setRetouchText] = useState("")
   const [varCount, setVarCount] = useState(1)
   const [filmStrength, setFilmStrength] = useState<FilmStrength>("light")
+  // 리터치·베리에이션은 회차 품질 티어로 과금되므로(useCreatePipeline: qualityRef 기준),
+  // 단가 칩도 같은 값을 노출한다(기본 95 / 최고 190). 정적 "~₩95"면 Pro에서 실제 190원과 어긋난다.
+  const actionCostChip = fmt(t.create.retouchCost, { krw: generateCostFor(quality) })
 
   // 선택 후보 이미지를 정사각 작업 소스로 디코드(리터치로 dataUrl이 바뀌면 재디코드).
   useEffect(() => {
@@ -507,7 +518,7 @@ function SelectedWorkbench({
               disabled={candidate.retouching || !retouchText.trim()}
               style={{ ...primaryBtn, opacity: candidate.retouching || !retouchText.trim() ? 0.55 : 1 }}
             >
-              {candidate.retouching ? t.create.retouchRunning : `${t.create.retouchApply} · ${t.create.retouchCost}`}
+              {candidate.retouching ? t.create.retouchRunning : `${t.create.retouchApply} · ${actionCostChip}`}
             </button>
             {!!candidate.retouchHistory?.length && (
               <button type="button" onClick={() => onRevertRetouch(candidate.id)} style={outlineMiniBtn}>
@@ -538,7 +549,7 @@ function SelectedWorkbench({
               }
               style={outlineBtnFull}
             >
-              {t.create.variationBtn} · {t.create.retouchCost}
+              {t.create.variationBtn} · {actionCostChip}
             </button>
             <p style={hintText}>{t.create.variationHint}</p>
           </div>

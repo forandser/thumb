@@ -12,12 +12,32 @@
  */
 import { AiError, type AiErrorCode } from "./anthropic"
 
-/** 모델 ID(별명 "나노바나나"). */
-export const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
+/**
+ * 이미지 모델 2티어(v0.8). 제작 트랙 "품질" 선택이 이 상수로 매핑된다.
+ *   - DEFAULT(3.1 Flash): 기본 품질·빠름(~95원). 보정 트랙 AI 편집도 항상 이 모델.
+ *   - PRO(3 Pro): 최고 품질·느림(~190원). 제작 트랙에서만 선택 가능.
+ *   - LEGACY(2.5): 롤백용. UI 미노출 — preview 모델(3.1/3 Pro) 실키 실패 시 즉시 되돌릴 상수.
+ * 3.1/3 Pro는 preview 모델이라 사용자 키 가용성이 미검증이다(스펙 §① 리스크). 실패는
+ * 기존 에러 매트릭스(invalid_key/geo_blocked/unknown)로 안내된다.
+ */
+export const GEMINI_MODEL_DEFAULT = "gemini-3.1-flash-image-preview"
+export const GEMINI_MODEL_PRO = "gemini-3-pro-image-preview"
+export const GEMINI_MODEL_LEGACY = "gemini-2.5-flash-image"
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
-/** 장당 나노바나나 호출 추정 비용(KRW, 기획 확정치 ~55원). 비용 트래커·버튼 라벨 공용. */
-export const GEMINI_COST_KRW = 55
+/** 제작 트랙 품질 티어. PipelineConfig.quality가 이 값으로 model을 고른다. */
+export type GeminiQuality = "default" | "pro"
+
+/** 품질 티어 → 실제 모델 ID. 생성·재생성·리터치·베리에이션이 공용으로 참조한다. */
+export function modelForQuality(quality: GeminiQuality): string {
+  return quality === "pro" ? GEMINI_MODEL_PRO : GEMINI_MODEL_DEFAULT
+}
+
+/**
+ * 장당 나노바나나(기본 모델) 호출 추정 비용(KRW). 비용 트래커·버튼 라벨 공용.
+ * v0.8에서 기본 모델(3.1 Flash) 기준 ~95원으로 갱신(보정 트랙 AI 편집도 이 값).
+ */
+export const GEMINI_COST_KRW = 95
 
 interface GeminiErrorBody {
   error?: {
@@ -111,11 +131,12 @@ async function requestGemini(
   apiKey: string,
   parts: GeminiPart[],
   signal?: AbortSignal,
+  model: string = GEMINI_MODEL_DEFAULT,
 ): Promise<{ dataUrl: string }> {
   let res: Response
   try {
     res = await fetch(
-      `${API_BASE}/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      `${API_BASE}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: "POST",
         signal,
@@ -182,13 +203,14 @@ export async function editImage(
   base64Jpeg: string | string[],
   instruction: string,
   signal?: AbortSignal,
+  model: string = GEMINI_MODEL_DEFAULT,
 ): Promise<{ dataUrl: string }> {
   const images = Array.isArray(base64Jpeg) ? base64Jpeg : [base64Jpeg]
   const parts: GeminiPart[] = [
     { text: instruction },
     ...images.map((data) => ({ inline_data: { mime_type: "image/jpeg", data } })),
   ]
-  return requestGemini(apiKey, parts, signal)
+  return requestGemini(apiKey, parts, signal, model)
 }
 
 /**
@@ -203,6 +225,7 @@ export async function generateImage(
   apiKey: string,
   prompt: string,
   signal?: AbortSignal,
+  model: string = GEMINI_MODEL_DEFAULT,
 ): Promise<{ dataUrl: string }> {
-  return requestGemini(apiKey, [{ text: prompt }], signal)
+  return requestGemini(apiKey, [{ text: prompt }], signal, model)
 }

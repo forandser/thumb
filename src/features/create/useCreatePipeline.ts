@@ -15,8 +15,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AiError, type AiErrorCode } from "@/lib/ai/anthropic"
-import { editImage, generateImage } from "@/lib/ai/gemini"
-import { GENERATE_COST_KRW, INSPECT_COST_KRW } from "@/lib/ai/costs"
+import { editImage, generateImage, modelForQuality, type GeminiQuality } from "@/lib/ai/gemini"
+import { generateCostFor, INSPECT_COST_KRW } from "@/lib/ai/costs"
 import { inspectCandidate } from "@/lib/ai/inspect"
 import { appendRetryHint, buildPrompt, VARIATION_INSTRUCTION } from "@/lib/create/prompt-engine"
 import { imageToAiBase64 } from "@/lib/image/source"
@@ -130,6 +130,9 @@ export function useCreatePipeline({
 
   // 진행 중 모든 호출을 한 번에 끊는 컨트롤러(중단·언마운트·사진 전환).
   const abortRef = useRef<AbortController | null>(null)
+  // 현재 회차 품질 티어. 베리에이션·리터치는 config를 받지 않으므로, start()가 세운 이 값으로
+  // 같은 티어의 모델·단가를 이어 쓴다(생성과 후속 편집의 품질을 일치시킴 — 스펙 §①).
+  const qualityRef = useRef<GeminiQuality>("default")
   // "후보 N" 라벨 카운터(베리에이션 추가에도 이어서 증가).
   const indexRef = useRef(0)
   const idRef = useRef(0)
@@ -151,6 +154,8 @@ export function useCreatePipeline({
     (config: PipelineConfig, prompt: string, signal: AbortSignal, singleInput = false): Promise<string> => {
       // 실물 보존 초기 생성은 [대표, 보조…]를 함께 실어 편집(레퍼런스 픽셀은 구조적으로 미포함).
       // 재생성은 대표 1장만 실어 v0.4와 동일한 단일 이미지 입력을 유지한다.
+      // 품질 티어 → 모델(기본 3.1 Flash / 최고 3 Pro). 재생성도 같은 티어를 유지한다.
+      const model = modelForQuality(config.quality)
       const call =
         config.mode === "preserve"
           ? editImage(
@@ -158,8 +163,9 @@ export function useCreatePipeline({
               singleInput ? config.materialBase64 : generationInputBase64s(config),
               prompt,
               signal,
+              model,
             )
-          : generateImage(geminiKey, prompt, signal)
+          : generateImage(geminiKey, prompt, signal, model)
       return call.then((r) => r.dataUrl)
     },
     [geminiKey],
@@ -200,7 +206,7 @@ export function useCreatePipeline({
           // 재생성은 대표 1장 단일 입력(스펙 §생성) — 프롬프트도 다각도 지시 없이 조립한다.
           const retryPrompt = appendRetryHint(buildConfigPrompt(config, true), r.retryHint)
           const dataUrl2 = await withRetry((s) => genOne(config, retryPrompt, s, true), signal)
-          onSpend(GENERATE_COST_KRW)
+          onSpend(generateCostFor(config.quality))
           patch(id, { dataUrl: dataUrl2, status: "inspecting" })
           const candB642 = await dataUrlToAiBase64(dataUrl2)
           const r2 = await withRetry(
@@ -231,6 +237,8 @@ export function useCreatePipeline({
       abortRef.current = controller
       const signal = controller.signal
       setOpError(null)
+      // 이 회차의 품질 티어를 고정 — 이후 베리에이션·리터치가 같은 티어를 이어 쓴다.
+      qualityRef.current = config.quality
 
       const slots: Candidate[] = Array.from({ length: config.candidateCount }, () => ({
         id: nextId(),
@@ -257,7 +265,7 @@ export function useCreatePipeline({
       const runOne = async (slot: Candidate) => {
         try {
           const dataUrl = await withRetry((s) => genOne(config, prompt, s), signal)
-          onSpend(GENERATE_COST_KRW)
+          onSpend(generateCostFor(config.quality))
           patch(slot.id, { dataUrl, status: "done" })
           await inspectAndMaybeRegen(config, slot.id, dataUrl, signal, reserveRegen)
         } catch (e) {
@@ -298,7 +306,7 @@ export function useCreatePipeline({
       patch(id, { status: "generating", errorCode: undefined })
       try {
         const dataUrl = await withRetry((s) => genOne(config, prompt, s, true), signal)
-        onSpend(GENERATE_COST_KRW)
+        onSpend(generateCostFor(config.quality))
         patch(id, { dataUrl, status: "done", regenerated: false, inspection: undefined })
         // 수동 재생성은 예산과 무관하게 자동 재생성을 허용하지 않는다(reserveRegen: 항상 false).
         await inspectAndMaybeRegen(config, id, dataUrl, signal, () => false)
@@ -347,8 +355,9 @@ export function useCreatePipeline({
           const slot = queue.shift()
           if (!slot) return
           try {
-            const { dataUrl } = await editImage(geminiKey, base64, VARIATION_INSTRUCTION, signal)
-            onSpend(GENERATE_COST_KRW)
+            const model = modelForQuality(qualityRef.current)
+            const { dataUrl } = await editImage(geminiKey, base64, VARIATION_INSTRUCTION, signal, model)
+            onSpend(generateCostFor(qualityRef.current))
             patch(slot.id, { dataUrl, status: "done" })
           } catch (e) {
             if (e instanceof DOMException && e.name === "AbortError") return
@@ -377,8 +386,9 @@ export function useCreatePipeline({
       patch(id, { retouching: true })
       try {
         const base64 = await dataUrlToAiBase64(prev)
-        const { dataUrl } = await editImage(geminiKey, base64, instruction, signal)
-        onSpend(GENERATE_COST_KRW)
+        const model = modelForQuality(qualityRef.current)
+        const { dataUrl } = await editImage(geminiKey, base64, instruction, signal, model)
+        onSpend(generateCostFor(qualityRef.current))
         const history = [prev, ...(target.retouchHistory ?? [])].slice(0, RETOUCH_HISTORY_MAX)
         patch(id, { dataUrl, retouchHistory: history, retouching: false })
         return true
