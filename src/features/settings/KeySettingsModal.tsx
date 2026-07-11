@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Modal } from "@/components/ui/Modal"
 import { HelpModal } from "./HelpModal"
 import { t } from "@/lib/i18n"
@@ -27,15 +27,35 @@ export function KeySettingsModal({
   const [showGemini, setShowGemini] = useState(false)
   const [help, setHelp] = useState<null | "claude" | "gemini">(null)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [autoSaved, setAutoSaved] = useState(false)
 
-  // 모달이 열릴 때 저장된 값으로 입력칸을 동기화.
+  // 모달이 "열리는 순간"에만 저장된 값으로 입력칸을 동기화하고 플래시를 초기화한다.
+  // (열려 있는 동안 keys가 바뀌어도 리셋하지 않는다 — 자동 저장이 keys를 바꾸는 순간
+  //  방금 켠 "자동 저장됨" 표기를 같은 커밋에서 꺼버리던 결함 수정. prevOpen으로 열림 전환만 감지.)
+  const prevOpen = useRef(false)
   useEffect(() => {
-    if (open) {
+    const justOpened = open && !prevOpen.current
+    prevOpen.current = open
+    if (justOpened) {
       setClaude(keys.claude)
       setGemini(keys.gemini)
       setSavedFlash(false)
+      setAutoSaved(false)
     }
   }, [open, keys.claude, keys.gemini])
+
+  // v0.6 자동 저장 — 입력이 바뀌면 400ms 디바운스 후 저장(onSave)하고 "자동 저장됨" 표기.
+  // 저장본과 같으면(열릴 때 동기화분·저장 직후) 스킵해 불필요한 저장·깜빡임을 막는다.
+  useEffect(() => {
+    if (!open) return
+    if (claude.trim() === keys.claude && gemini.trim() === keys.gemini) return
+    const id = window.setTimeout(() => {
+      onSave({ claude, gemini })
+      setAutoSaved(true)
+      window.setTimeout(() => setAutoSaved(false), 1600)
+    }, 400)
+    return () => window.clearTimeout(id)
+  }, [open, claude, gemini, keys.claude, keys.gemini, onSave])
 
   const handleSave = () => {
     onSave({ claude, gemini })
@@ -43,9 +63,18 @@ export function KeySettingsModal({
     window.setTimeout(() => setSavedFlash(false), 1600)
   }
 
+  // 닫기 직전, 디바운스가 아직 저장하지 못한 편집이 남아 있으면 즉시 저장(flush)한다.
+  // (키 붙여넣기 후 400ms 이내에 닫으면 대기 타이머가 취소돼 입력이 유실되던 경로 방지.)
+  const handleClose = () => {
+    if (claude.trim() !== keys.claude || gemini.trim() !== keys.gemini) {
+      onSave({ claude, gemini })
+    }
+    onClose()
+  }
+
   return (
     <>
-      <Modal open={open} onClose={onClose} title={t.keySettings.title} maxWidth={520}>
+      <Modal open={open} onClose={handleClose} title={t.keySettings.title} maxWidth={520}>
         <p
           style={{
             fontSize: 13,
@@ -96,10 +125,28 @@ export function KeySettingsModal({
         </p>
 
         {/* 액션 */}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+            marginTop: 20,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: autoSaved ? "var(--color-success)" : "var(--color-ink-tertiary)",
+            }}
+          >
+            {autoSaved ? `✓ ${t.keySettings.autoSaved}` : t.keySettings.autoSaveHint}
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             style={{
               padding: "10px 18px",
               borderRadius: "var(--radius-sm)",
@@ -130,6 +177,7 @@ export function KeySettingsModal({
           >
             {savedFlash ? t.keySettings.saved : t.keySettings.save}
           </button>
+          </div>
         </div>
       </Modal>
 

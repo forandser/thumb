@@ -5,6 +5,9 @@ import { t, fmt } from "@/lib/i18n"
 import { DEFAULT_EDIT } from "@/lib/image/types"
 import { makeRotatedSource, renderEdit } from "@/lib/image/render"
 import { makeWorkingSource } from "@/lib/image/source"
+import { applyFilmTexture, type FilmStrength } from "@/lib/image/film-grain"
+import { DOWNLOAD_PRESETS, canvasToBlob, downloadBlob } from "@/lib/image/download"
+import { embedAiMetadata } from "@/lib/image/ai-mark"
 import {
   INSPECT_ITEM_COUNT,
   passCount,
@@ -24,6 +27,50 @@ import type { Candidate, PipelinePhase } from "./create-types"
 
 const VARIATION_COUNTS = [1, 2, 3] as const
 
+/** 작업대 필름 질감 강도 칩(약·중·끔). 기본 약(light). */
+const FILM_OPTIONS: { key: FilmStrength; label: string }[] = [
+  { key: "light", label: t.create.filmLight },
+  { key: "medium", label: t.create.filmMedium },
+  { key: "off", label: t.create.filmOff },
+]
+
+/** 이미지 dataURL을 디코드한 HTMLImageElement로 반환(빠른 저장용). */
+function decodeImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error("image decode failed"))
+    img.src = src
+  })
+}
+
+/**
+ * 후보 카드 빠른 저장(v0.6) — 작업대를 거치지 않고 그 자리에서 기본 규격(1080 PNG)으로 저장.
+ * dataUrl → 정사각 캔버스 → 필름 그레인(약) → AI 표시 메타데이터 → 저장. 파일명은 후보 index로.
+ * 작업대 DownloadPanel과 동일한 렌더/후처리 파이프라인을 타되 오버레이·워터마크·규격 선택은 생략한다.
+ */
+async function quickSaveCandidate(
+  candidate: Candidate,
+  { vignette }: { vignette: boolean },
+): Promise<void> {
+  if (!candidate.dataUrl) throw new Error("no image to save")
+  const img = await decodeImage(candidate.dataUrl)
+  const rotated = makeRotatedSource(makeWorkingSource(img), 0)
+  const preset = DOWNLOAD_PRESETS.png
+  const canvas = renderEdit(rotated, DEFAULT_EDIT, {
+    withAdjustments: false,
+    forceSquare: true,
+    targetSize: preset.size,
+  })
+  // 흰 배경 대표이미지(heroWhiteBg)면 비네팅을 꺼 모서리를 순백으로 유지(그레인만).
+  applyFilmTexture(canvas, { strength: "light", vignette })
+  let blob = await canvasToBlob(canvas, preset)
+  if (!blob) throw new Error("failed to encode image")
+  blob = await embedAiMetadata(blob)
+  if (!blob) throw new Error("failed to encode image")
+  downloadBlob(blob, `thumbnail-1080-${candidate.index}.png`)
+}
+
 /**
  * STEP 3 — 뽑고 다듬기. 진행 표시 · 후보 카드(뱃지·사유 툴팁) · 선택 후 작업대
  * (대화형 리터치 · 구도 베리에이션 · 한글 텍스트 오버레이 · 다운로드).
@@ -33,6 +80,7 @@ export function Step3Results({
   phase,
   opError,
   overlayAllowed,
+  heroWhiteBg,
   hasGeminiKey,
   onRegenerate,
   onVariation,
@@ -47,6 +95,8 @@ export function Step3Results({
   opError: AiErrorCode | null
   /** 텍스트 오버레이 허용(대표이미지 계열이면 false). */
   overlayAllowed: boolean
+  /** 흰 배경 대표이미지 프리셋(studioClean 등) — 필름 비네팅을 꺼 순백 모서리를 유지한다. */
+  heroWhiteBg: boolean
   hasGeminiKey: boolean
   onRegenerate: (id: string) => void
   onVariation: (sourceDataUrl: string, n: number) => void
@@ -77,6 +127,7 @@ export function Step3Results({
         <SelectedWorkbench
           candidate={selected}
           overlayAllowed={overlayAllowed}
+          heroWhiteBg={heroWhiteBg}
           hasGeminiKey={hasGeminiKey}
           onBack={() => setSelectedId(null)}
           onVariation={onVariation}
@@ -87,6 +138,7 @@ export function Step3Results({
       ) : (
         <CandidateGrid
           candidates={candidates}
+          heroWhiteBg={heroWhiteBg}
           onSelect={setSelectedId}
           onRegenerate={onRegenerate}
         />
@@ -160,10 +212,12 @@ function Spinner() {
 // ── 후보 그리드 ──────────────────────────────────────────────────────────────
 function CandidateGrid({
   candidates,
+  heroWhiteBg,
   onSelect,
   onRegenerate,
 }: {
   candidates: Candidate[]
+  heroWhiteBg: boolean
   onSelect: (id: string) => void
   onRegenerate: (id: string) => void
 }) {
@@ -177,7 +231,13 @@ function CandidateGrid({
       }}
     >
       {candidates.map((c) => (
-        <CandidateCard key={c.id} candidate={c} onSelect={onSelect} onRegenerate={onRegenerate} />
+        <CandidateCard
+          key={c.id}
+          candidate={c}
+          heroWhiteBg={heroWhiteBg}
+          onSelect={onSelect}
+          onRegenerate={onRegenerate}
+        />
       ))}
     </div>
   )
@@ -185,10 +245,12 @@ function CandidateGrid({
 
 function CandidateCard({
   candidate,
+  heroWhiteBg,
   onSelect,
   onRegenerate,
 }: {
   candidate: Candidate
+  heroWhiteBg: boolean
   onSelect: (id: string) => void
   onRegenerate: (id: string) => void
 }) {
@@ -198,6 +260,22 @@ function CandidateCard({
     candidate.status === "inspecting" ||
     candidate.status === "regenerating"
   const selectable = candidate.status === "done" && !!candidate.dataUrl
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(false)
+
+  const handleQuickSave = async () => {
+    setSaving(true)
+    setSaveError(false)
+    try {
+      // 흰 배경 대표이미지면 비네팅 제외(순백 모서리 유지) — 미리보기·작업대 저장과 동일 규칙.
+      await quickSaveCandidate(candidate, { vignette: !heroWhiteBg })
+    } catch {
+      // 디코드·인코딩 실패 시 조용히 삼키지 않고 셀러에게 재시도 안내를 띄운다(스펙 §① 저장 우선).
+      setSaveError(true)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div style={cardBox}>
@@ -245,16 +323,33 @@ function CandidateCard({
           </span>
         )}
 
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {selectable && (
             <button type="button" onClick={() => onSelect(candidate.id)} style={selectBtn}>
-              {t.create.select}
+              {t.create.pickRefine}
             </button>
           )}
-          {(candidate.status === "done" || candidate.status === "failed") && candidate.kind === "generated" && (
-            <button type="button" onClick={() => onRegenerate(candidate.id)} style={miniBtn}>
-              ↻ {t.create.retry}
-            </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            {selectable && (
+              <button
+                type="button"
+                onClick={handleQuickSave}
+                disabled={saving}
+                style={{ ...miniBtn, flex: 1, opacity: saving ? 0.6 : 1 }}
+              >
+                {saving ? t.create.quickSaving : `↓ ${t.create.quickSave}`}
+              </button>
+            )}
+            {(candidate.status === "done" || candidate.status === "failed") && candidate.kind === "generated" && (
+              <button type="button" onClick={() => onRegenerate(candidate.id)} style={miniBtn}>
+                ↻ {t.create.retry}
+              </button>
+            )}
+          </div>
+          {saveError && (
+            <span style={{ fontSize: 11, color: "var(--color-danger)", lineHeight: 1.4 }} role="alert">
+              {t.create.quickSaveError}
+            </span>
           )}
         </div>
       </div>
@@ -307,6 +402,7 @@ function candidateBadge(
 function SelectedWorkbench({
   candidate,
   overlayAllowed,
+  heroWhiteBg,
   hasGeminiKey,
   onBack,
   onVariation,
@@ -316,6 +412,7 @@ function SelectedWorkbench({
 }: {
   candidate: Candidate
   overlayAllowed: boolean
+  heroWhiteBg: boolean
   hasGeminiKey: boolean
   onBack: () => void
   onVariation: (sourceDataUrl: string, n: number) => void
@@ -327,6 +424,7 @@ function SelectedWorkbench({
   const [overlay, setOverlay] = useState<TextOverlay>(DEFAULT_OVERLAY)
   const [retouchText, setRetouchText] = useState("")
   const [varCount, setVarCount] = useState(1)
+  const [filmStrength, setFilmStrength] = useState<FilmStrength>("light")
 
   // 선택 후보 이미지를 정사각 작업 소스로 디코드(리터치로 dataUrl이 바뀌면 재디코드).
   useEffect(() => {
@@ -346,11 +444,14 @@ function SelectedWorkbench({
   }, [candidate.dataUrl])
 
   const effectiveOverlay = overlayAllowed ? overlay : DEFAULT_OVERLAY
+  // 오버레이 → 필름 그레인 순서로 최종 캔버스에 굽는다(ai-mark 전 픽셀 단계). 미리보기와 동일.
+  // 흰 배경 대표이미지(heroWhiteBg)는 비네팅을 꺼 순백 모서리를 유지한다(그레인만).
   const onBeforeBlob = useCallback(
     (canvas: HTMLCanvasElement) => {
       if (overlayAllowed) drawTextOverlay(canvas, effectiveOverlay)
+      applyFilmTexture(canvas, { strength: filmStrength, vignette: !heroWhiteBg })
     },
-    [overlayAllowed, effectiveOverlay],
+    [overlayAllowed, effectiveOverlay, filmStrength, heroWhiteBg],
   )
 
   const submitRetouch = async () => {
@@ -373,7 +474,12 @@ function SelectedWorkbench({
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
         {/* 좌: 미리보기 */}
         <section style={{ flex: "1 1 320px", minWidth: 260, display: "flex", justifyContent: "center" }}>
-          <OverlayPreview rotated={rotated} overlay={effectiveOverlay} />
+          <OverlayPreview
+            rotated={rotated}
+            overlay={effectiveOverlay}
+            filmStrength={filmStrength}
+            heroWhiteBg={heroWhiteBg}
+          />
         </section>
 
         {/* 우: 도구 */}
@@ -444,6 +550,24 @@ function SelectedWorkbench({
 
         {/* 다운로드 */}
         <aside style={toolCol}>
+          {/* 필름 질감 강도 — 미리보기·저장에 동일 적용(화면=저장). 기본 약. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <h3 style={toolTitle}>🎞 {t.create.filmTextureTitle}</h3>
+            <div style={{ display: "flex", gap: 6 }}>
+              {FILM_OPTIONS.map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setFilmStrength(o.key)}
+                  style={filmStrength === o.key ? chipActive : chip}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p style={hintText}>{t.create.filmTextureHint}</p>
+          </div>
+
           <DownloadPanel
             rotatedSource={rotated}
             edit={DEFAULT_EDIT}
@@ -461,9 +585,13 @@ function SelectedWorkbench({
 function OverlayPreview({
   rotated,
   overlay,
+  filmStrength,
+  heroWhiteBg,
 }: {
   rotated: HTMLCanvasElement | null
   overlay: TextOverlay
+  filmStrength: FilmStrength
+  heroWhiteBg: boolean
 }) {
   const canvas = useMemo(() => {
     if (!rotated) return null
@@ -473,8 +601,11 @@ function OverlayPreview({
       targetSize: 520,
     })
     drawTextOverlay(c, overlay)
+    // 미리보기에도 저장과 동일한 필름 질감을 적용(화면=저장, v0.4 워터마크 누락 교훈).
+    // 흰 배경 대표이미지는 비네팅을 꺼 저장본과 동일하게 순백 모서리를 유지한다.
+    applyFilmTexture(c, { strength: filmStrength, vignette: !heroWhiteBg })
     return c.toDataURL("image/png")
-  }, [rotated, overlay])
+  }, [rotated, overlay, filmStrength, heroWhiteBg])
 
   return (
     <div

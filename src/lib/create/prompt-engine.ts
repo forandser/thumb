@@ -53,9 +53,20 @@ const IMPERFECTION_PRESERVE =
 const IMPERFECTION_GENERATE =
   "subtle film grain ISO 400, natural imperfections, tiny water droplets, visible natural bloom on the skin"
 
-/** 공통 네거티브(리서치 §④). */
+/**
+ * 공통 실사 절(v0.6 신설, preserve/generate 공통) — 리서치 §④(플라스틱 질감·과채도·
+ * 반복 패턴·불가능한 완벽함) 대응. 기존 "photorealistic..." 한 줄을 이 절로 대체·확장한다.
+ */
+const REALISM_CLAUSE =
+  "authentic photograph, shot on film, natural film grain, realistic subsurface scattering on the fruit skin, visible natural surface texture and micro-blemishes, true-to-life color (not oversaturated), imperfect organic shapes"
+
+/** 광학 사실성 절(v0.6 신설) — CGI처럼 균일한 배경 보케를 억제한다. */
+const OPTICAL_CLAUSE =
+  "natural optical depth of field, soft imperfect background bokeh, subtle lens vignetting, gentle natural falloff"
+
+/** 공통 네거티브(리서치 §④). v0.6에서 플라스틱·CGI 신호 네거티브를 강화. */
 const NEGATIVE =
-  "avoid: illustration, 3D render, CGI, plastic texture, oversaturated colors, perfect symmetry, any text or letters or logos"
+  "avoid: illustration, 3D render, CGI, plastic texture, oversaturated colors, perfect symmetry, any text or letters or logos, waxy plastic highlights, CGI sheen, airbrushed skin, uniform repeating patterns, artificial perfect bokeh, digital over-smoothing"
 
 /** 레퍼런스·프리셋 모두 없을 때의 중립 폴백 스타일. */
 const NEUTRAL_STYLE =
@@ -119,11 +130,18 @@ export function buildPrompt(input: PromptInput): string {
     ? presetStyleBlock(preset)
     : referenceStyleBlock(input.referenceStyle ?? "")
 
+  // studioClean은 깔끔한 순백·정면 e-커머스 단독컷이라 배경 보케·렌즈 비네팅 지시(OPTICAL_CLAUSE)를
+  // 넣지 않는다 — 필름 스톡 제외(presets.ts)와 같은 취지로, 순백 배경이 어두워지거나 흐려지는 것을 막는다.
+  const skipOptical = preset?.key === "studioClean"
+
   const blocks: string[] = [
     subjectBlock(input),
     styleBlock,
     input.mode === "preserve" ? IMPERFECTION_PRESERVE : IMPERFECTION_GENERATE,
-    "photorealistic, looks like a real photograph taken with a professional camera",
+    // 공통 실사 절 + 광학 사실성 절 — preserve/generate 양쪽에 포함(스펙 §③).
+    // 단 studioClean(순백 클린 단독컷)은 광학 사실성 절을 제외한다.
+    REALISM_CLAUSE,
+    ...(skipOptical ? [] : [OPTICAL_CLAUSE]),
     NEGATIVE,
   ]
   if (input.mode === "preserve") {
@@ -140,7 +158,8 @@ export function buildPrompt(input: PromptInput): string {
 export function appendRetryHint(prompt: string, retryHint: string): string {
   const hint = retryHint.trim()
   if (!hint) return prompt
-  return `${prompt} Fix these issues from the previous attempt: ${hint}.`
+  // 재생성 힌트에도 실사 절을 재강조(스펙 §③) — 문제 수정 중 다시 매끈해지지 않게.
+  return `${prompt} Fix these issues from the previous attempt: ${hint}. Keep it an authentic film photograph with natural grain and true-to-life color, not a smooth CGI render.`
 }
 
 /**
@@ -148,6 +167,10 @@ export function appendRetryHint(prompt: string, retryHint: string): string {
  * 피사체·스타일·개수·과분은 그대로 유지(재검수 없이 A컷 신뢰 승계).
  */
 export const VARIATION_INSTRUCTION =
-  "same subject, same styling, same fruit and count, vary only the camera angle and distance. Keep colors, bloom, and lighting mood identical. photorealistic. " +
+  "same subject, same styling, same fruit and count, vary only the camera angle and distance. Keep colors, bloom, and lighting mood identical. " +
+  REALISM_CLAUSE +
+  ". " +
+  OPTICAL_CLAUSE +
+  ". " +
   NEGATIVE +
   "."

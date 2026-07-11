@@ -327,6 +327,10 @@ export function CreateWizard({
   // 텍스트 오버레이 허용 — 대표이미지 계열(스튜디오 클린 등 allowsTextOverlay=false)에서 비활성.
   const overlayAllowed =
     styleChoice === "reference" ? true : (getPreset(styleChoice)?.allowsTextOverlay ?? true)
+  // 흰 배경 대표이미지 프리셋(studioClean=heroSafe) — 필름 비네팅을 꺼 순백 모서리를 유지한다.
+  // (레퍼런스 모드는 배경을 알 수 없어 기본 비네팅 유지.)
+  const heroWhiteBg =
+    styleChoice === "reference" ? false : (getPreset(styleChoice)?.heroSafe ?? false)
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "24px 20px" }}>
@@ -386,6 +390,7 @@ export function CreateWizard({
           phase={pipeline.phase}
           opError={pipeline.opError}
           overlayAllowed={overlayAllowed}
+          heroWhiteBg={heroWhiteBg}
           hasGeminiKey={hasGeminiKey}
           onRegenerate={(id) => config && pipeline.regenerateOne(config, id)}
           onVariation={pipeline.runVariation}

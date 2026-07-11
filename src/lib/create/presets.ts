@@ -47,7 +47,8 @@ export interface StylePreset {
 export const PRESETS: readonly StylePreset[] = [
   {
     key: "morningMarket",
-    camera: "shot on Canon 5D, 85mm f/2.8, eye-level at a 45-degree angle, generous negative space",
+    camera:
+      "shot on Canon 5D, 85mm f/2.8, eye-level at a 45-degree angle, generous negative space, on Kodak Portra 400 film",
     lighting:
       "soft north-facing window light from the left at 45 degrees, 5500K, gentle side light that reveals surface texture",
     background:
@@ -57,7 +58,8 @@ export const PRESETS: readonly StylePreset[] = [
   },
   {
     key: "premiumDark",
-    camera: "shot on Canon 5D, 100mm f/4, low three-quarter angle, tight composition with breathing room",
+    camera:
+      "shot on Canon 5D, 100mm f/4, low three-quarter angle, tight composition with breathing room, on Kodak Portra 800 film",
     lighting:
       "chiaroscuro low-key lighting, a single narrow soft side light, deep controlled shadows, 5200K",
     background:
@@ -67,7 +69,8 @@ export const PRESETS: readonly StylePreset[] = [
   },
   {
     key: "juicyCut",
-    camera: "100mm macro f/2.8, close-up of a clean cross-section, single focal plane",
+    camera:
+      "100mm macro f/2.8, close-up of a clean cross-section, single focal plane, on Kodak Ektar 100 film",
     lighting:
       "backlight passing through the fruit flesh for a translucent glow, juicy specular highlights, 5600K",
     background:
@@ -77,7 +80,8 @@ export const PRESETS: readonly StylePreset[] = [
   },
   {
     key: "onTheTable",
-    camera: "shot on Sony A7, 50mm f/2.0 at a 45-degree angle, shallow depth of field with soft background blur",
+    camera:
+      "shot on Sony A7, 50mm f/2.0 at a 45-degree angle, shallow depth of field with soft background blur, on Kodak Portra 400 film",
     lighting: "soft diffused daylight from the side, natural editorial lifestyle mood, 5400K",
     background:
       "a styled dining table with a ceramic bowl, a linen napkin and one or two seasonal props, Korean premium grocery styling",
@@ -86,7 +90,8 @@ export const PRESETS: readonly StylePreset[] = [
   },
   {
     key: "farmFresh",
-    camera: "shot on Fujifilm, 35mm f/4 at a natural outdoor angle, honest documentary framing",
+    camera:
+      "shot on Fujifilm, 35mm f/4 at a natural outdoor angle, honest documentary framing, on Kodak Portra 400 film",
     lighting: "natural outdoor daylight under soft overcast, authentic and unstyled, 5600K",
     background: "a rustic wooden crate with green leaves, farm-direct authenticity, earthy tones",
     allowsTextOverlay: true,
@@ -94,6 +99,7 @@ export const PRESETS: readonly StylePreset[] = [
   },
   {
     key: "studioClean",
+    // 스튜디오 클린만 필름 스톡 미병기 — 깔끔한 오픈마켓 단독컷이라 디지털 캡처 유지(스펙 §③).
     camera: "shot on Canon 5D, 85mm f/8, straight-on product angle, centered with balanced margins",
     lighting: "a large softbox side light, even soft illumination, minimal soft contact shadow, 5500K",
     background: "a seamless plain white to cream backdrop, no props, clean e-commerce thumbnail look",
@@ -102,7 +108,8 @@ export const PRESETS: readonly StylePreset[] = [
   },
   {
     key: "seasonMood",
-    camera: "shot on Sony A7, 50mm f/2.8 at a 45-degree angle, seasonal editorial framing",
+    camera:
+      "shot on Sony A7, 50mm f/2.8 at a 45-degree angle, seasonal editorial framing, on Kodak Portra 400 film",
     lighting: "soft directional light matched to the season, 5500K",
     background:
       "a seasonal color palette and props — summer: ice cubes and cool blue tones; winter: warm knit and cozy textures",

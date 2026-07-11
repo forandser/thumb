@@ -33,6 +33,9 @@ export const ko = {
     statusEmpty: "미연결",
     save: "저장",
     saved: "저장했어요",
+    // v0.6 자동 저장 — 입력 즉시 디바운스 저장. 버튼은 안심용으로 유지.
+    autoSaved: "자동 저장됨",
+    autoSaveHint: "입력하면 자동으로 저장돼요",
     close: "닫기",
     privacy: "키는 내 브라우저에만 저장되고 서버로 전송되지 않아요.",
     show: "보기",
@@ -422,6 +425,11 @@ export const ko = {
     candidateFailed: "생성 실패",
     candidateLabel: "후보 {n}",
     select: "이 컷 선택",
+    // v0.6 다운로드 UX — 후보 카드에서 바로 저장(빠른 저장) / 작업대로 가서 다듬기.
+    pickRefine: "고르기 · 다듬기",
+    quickSave: "저장",
+    quickSaving: "저장 중...",
+    quickSaveError: "저장에 실패했어요. 잠시 후 다시 시도해 주세요.",
     selected: "선택됨",
     retry: "다시 생성",
     failedItemsTitle: "미통과 항목",
@@ -472,6 +480,13 @@ export const ko = {
     // STEP 3 — 다운로드
     watermarkToggle: "워터마크 표시 (우하단 'AI 생성')",
     watermarkHint: "켜면 이미지 우하단에 반투명 'AI 생성' 글자가 함께 저장돼요.",
+
+    // STEP 3 — 필름 질감(v0.6 후처리) — 미리보기·저장에 동일 적용(화면=저장).
+    filmTextureTitle: "필름 질감",
+    filmLight: "약",
+    filmMedium: "중",
+    filmOff: "끔",
+    filmTextureHint: "미세한 필름 그레인을 얹어 매끈한 AI 티를 줄여요. 미리보기로 강도를 확인하세요 — 저장본은 고해상도라 그레인이 조금 더 곱게 보일 수 있어요.",
 
     // 보정 → 제작 연결
     sendToCreate: "이 사진으로 썸네일 만들기",

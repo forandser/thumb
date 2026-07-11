@@ -161,7 +161,7 @@ export function DownloadPanel({
         </div>
       )}
 
-      <SafeCheckSection rotatedSource={rotatedSource} edit={edit} />
+      <SafeCheckSection rotatedSource={rotatedSource} edit={edit} onBeforeBlob={onBeforeBlob} />
     </div>
   )
 }
@@ -173,9 +173,12 @@ export function DownloadPanel({
 function SafeCheckSection({
   rotatedSource,
   edit,
+  onBeforeBlob,
 }: {
   rotatedSource: HTMLCanvasElement
   edit: EditState
+  /** 인코딩 직전 후처리 훅(오버레이·필름 그레인). 검수를 실제 저장본 픽셀로 돌리기 위해 동일 적용. */
+  onBeforeBlob?: (canvas: HTMLCanvasElement) => void
 }) {
   const [result, setResult] = useState<SafeCheckResult | null>(null)
   const [stale, setStale] = useState(false)
@@ -185,7 +188,7 @@ function SafeCheckSection({
   // (결과가 이유 없이 사라지면 셀러가 당황함 — 재검사 유도가 더 친절.)
   useEffect(() => {
     setStale(true)
-  }, [edit, rotatedSource])
+  }, [edit, rotatedSource, onBeforeBlob])
 
   const run = async () => {
     setRunning(true)
@@ -196,6 +199,9 @@ function SafeCheckSection({
         forceSquare: true,
         targetSize: preset.size,
       })
+      // 검수=저장: 실제 다운로드와 동일하게 오버레이·필름 그레인 후처리를 적용한 뒤 검사한다.
+      // (후처리 전 캔버스를 검사하면 흰 배경/상품비율 판정이 저장본과 어긋난다 — v0.6 결함 수정.)
+      onBeforeBlob?.(canvas)
       const blob = await canvasToBlob(canvas, preset)
       setResult(runSafeCheck(canvas, blob ? blob.size : 0))
       setStale(false)
