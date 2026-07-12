@@ -1,0 +1,5 @@
+1:"$Sreact.fragment"
+2:I[484,[],"ViewportBoundary"]
+3:I[484,[],"MetadataBoundary"]
+4:"$Sreact.suspense"
+0:{"rsc":["$","$1","h",{"children":[null,["$","$L2",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L3",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"썸네일 제작"}],["$","meta","1",{"name":"description","content":"과일 사진을 올려 크롭·색감을 다듬고 1000×1000 썸네일로 저장하세요. 키는 내 브라우저에만 저장됩니다."}],["$","meta","2",{"name":"robots","content":"noindex, nofollow"}]]}]}]}],null]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"3BXm1trH9gz07CY566KeF"}
